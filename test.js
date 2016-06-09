@@ -4,29 +4,36 @@ const exec = require('child_process').exec,
       _ = require('underscore');
 
 // This maps t's own choice of columns vs mine
-const T_FIELD_MAPPING = {
-    "list": {
-        'from': [ 'ID', 'Created at', 'Screen name', 'Slug', 'Members',
-            'Subscribers', 'Mode', 'Description' ],
-        'to': [ 'id', 'createdAt', 'screenName', 'slug', 'noOfMembers',
-            'noOfSubscribers', 'mode', 'description' ],
-        'ints': [ 'noOfMembers', 'noOfSubscribers' ],
-        'dates': [ 'createdAt' ]
-    },
-    "user": {
-        'from': [ 'ID', 'Since', 'Last tweeted at', 'Tweets', 'Favorites',
-            'Listed', 'Following', 'Followers', 'Screen name', 'Name',
-            'Verified', 'Protected', 'Bio', 'Status', 'Location', 'URL' ],
-        'to': [ 'id', 'userSince', 'lastTweetedAt', 'noOfTweets',
-            'noOfFavorites', 'noOflisted', 'noOfFollowing', 'noOfFollowers',
-            'screenName', 'name', 'verified', 'protected', 'bio', 'status',
-            'location', 'url' ],
-        'ints': [ 'noOfTweets', 'noOfFavorites', 'noOflisted', 'noOfFollowing',
-            'noOfFollowers' ],
-        'booleans': [ 'verified', 'protected' ],
-        'dates': [ 'userSince', 'lastTweetedAt' ]
-    }
-};
+const
+    MAX_LIST_TIMELINE_DEPTH = 3200,
+    T_FIELD_MAPPING = {
+        'list': {
+            'from': [ 'ID', 'Created at', 'Screen name', 'Slug', 'Members',
+                'Subscribers', 'Mode', 'Description' ],
+            'to': [ 'id', 'createdAt', 'screenName', 'slug', 'noOfMembers',
+                'noOfSubscribers', 'mode', 'description' ],
+            'ints': [ 'noOfMembers', 'noOfSubscribers' ],
+            'dates': [ 'createdAt' ]
+        },
+        'tweet': {
+            'from': [ 'ID', 'Posted at', 'Screen name', 'Text' ],
+            'to': [ 'id', 'postedAt', 'screenName', 'text' ],
+            'dates': [ 'postedAt' ]
+        },
+        'user': {
+            'from': [ 'ID', 'Since', 'Last tweeted at', 'Tweets', 'Favorites',
+                'Listed', 'Following', 'Followers', 'Screen name', 'Name',
+                'Verified', 'Protected', 'Bio', 'Status', 'Location', 'URL' ],
+            'to': [ 'id', 'userSince', 'lastTweetedAt', 'noOfTweets',
+                'noOfFavorites', 'noOflisted', 'noOfFollowing', 'noOfFollowers',
+                'screenName', 'name', 'verified', 'protected', 'bio', 'status',
+                'location', 'url' ],
+            'ints': [ 'noOfTweets', 'noOfFavorites', 'noOflisted', 'noOfFollowing',
+                'noOfFollowers' ],
+            'booleans': [ 'verified', 'protected' ],
+            'dates': [ 'userSince', 'lastTweetedAt' ]
+        }
+    };
 
 const tFieldMapGeneric = function (entry) {
     var config = this,
@@ -78,7 +85,9 @@ const execT = function(parameters, fieldMapFunction, callback) {
     });
 }
 
-const getListMembers = function (slug, callback) { execT('list members -l --csv ' + slug, tFieldMap.user, callback); }
+const getListMembers = function (slug, callback) {
+    execT('list members -l --csv ' + slug, tFieldMap.user, callback);
+}
 
 const getLists = function (callback) {
     execT('lists -l --csv', tFieldMap.list, function (err, lists) {
@@ -93,6 +102,10 @@ const getLists = function (callback) {
     });
 }
 
-getLists(function (err, data) {
+const getListTimeline = function (slug, callback) {
+    execT('list timeline -n ' + MAX_LIST_TIMELINE_DEPTH + ' --csv ' + slug, tFieldMap.tweet, callback); 
+}
+
+getListTimeline('def-con-crowd', function (err, data) {
     console.log(JSON.stringify(data));
 });
