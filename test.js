@@ -28,50 +28,60 @@ const T_FIELD_MAPPING = {
     }
 };
 
-const tFieldMap = function (mapType, entry) {
-    var newEntry = JSON.parse(JSON.stringify(entry));
+const tFieldMapGeneric = function (entry) {
+    var config = this,
+        newEntry = JSON.parse(JSON.stringify(entry));
     // copies the attributes, changing their names
-    var map = _.object(T_FIELD_MAPPING[mapType].from, T_FIELD_MAPPING[mapType].to);
-    _.keys(map).forEach(function (fieldName) {
-        newEntry[map[fieldName]] = entry[fieldName];
+    _.keys(config.map).forEach(function (fieldName) {
+        newEntry[config.map[fieldName]] = entry[fieldName];
         delete newEntry[fieldName];
     });
     // converts the integer values to int
-    (T_FIELD_MAPPING[mapType].ints || [ ]).forEach(function (fieldName) {
+    (config.ints || [ ]).forEach(function (fieldName) {
         newEntry[fieldName] = parseInt(newEntry[fieldName]);
     });
     // converts the boolean values to bool
-    (T_FIELD_MAPPING[mapType].booleans || [ ]).forEach(function (fieldName) {
+    (config.booleans || [ ]).forEach(function (fieldName) {
         newEntry[fieldName] = (newEntry[fieldName] === 'true');
     });
     // converts the dates to Date objects
-    (T_FIELD_MAPPING[mapType].dates || [ ]).forEach(function (fieldName) {
+    (config.dates || [ ]).forEach(function (fieldName) {
         newEntry[fieldName] = new Date(newEntry[fieldName]);
     });
     return(newEntry);
 }
 
+var tFieldMap = { }
+_.keys(T_FIELD_MAPPING).forEach(function (transformationName) {
+    tFieldMap[transformationName] = _.bind(
+        tFieldMapGeneric,
+        _.extend({
+            'map': _.object(
+                T_FIELD_MAPPING[transformationName].from,
+                T_FIELD_MAPPING[transformationName].to
+            )
+        }, T_FIELD_MAPPING[transformationName])
+    );
+});
+
 // runs _t_ with the specified parameters and adds a transformation of type
 // _mapType_ to each entry
-const execT = function(parameters, mapType, callback) {
+const execT = function(parameters, fieldMapFunction, callback) {
     exec('t ' + parameters, (error, stdout, stderr) => {
         if (error) {
             callback(new Error(error));
             return;
         }
         csv.parse(stdout, { 'columns': true }, function(err, data) {
-            data = data.map(function (entry) {
-                return tFieldMap(mapType, entry);
-            });
-            callback(null, data);
+            callback(null, data.map(fieldMapFunction));
         });
     });
 }
 
-const getListMembers = function (slug, callback) { execT('list members -l --csv ' + slug, 'user', callback); }
+const getListMembers = function (slug, callback) { execT('list members -l --csv ' + slug, tFieldMap.user, callback); }
 
 const getLists = function (callback) {
-    execT('lists -l --csv', 'list', function (err, lists) {
+    execT('lists -l --csv', tFieldMap.list, function (err, lists) {
         async.each(lists, function (list, callback) {
             getListMembers(list.slug, function (err, listMembers) {
                 list.members = listMembers;
