@@ -5,7 +5,7 @@ const fs = require('fs'),
       argv = require('yargs').argv,
       _ = require('underscore');
 
-const twitterClient = new Twitter(JSON.parse(fs.readFileSync(path.join(__dirname, 'credentials.json'), { 'encoding': 'utf8' })));
+const twitterClient = new Twitter(JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config', 'twitter2newsbeuter', 'twitter-config.json'), { 'encoding': 'utf8' })));
 
 const getListStatusesByName = function (name, callback) {
     twitterClient.get("lists/list.json", { }, function(err, lists, response) {
