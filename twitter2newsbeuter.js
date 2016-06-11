@@ -58,6 +58,8 @@ const main = function () {
         });
     }, function (err, tweets) {
         tweets = _.flatten(tweets, true);
+        // removes duplicates
+        tweets = _.uniq(tweets, function (s) { return s.id_str; });
         // makes the dates into Date objects
         tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
         // sort by created_at, descending
