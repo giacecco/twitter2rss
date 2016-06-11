@@ -5,6 +5,8 @@ const async = require('async'),
       Feed = require('feed'),
       argv = require('yargs')
           .usage('Usage: $0 -n [feed name] -l [list name] -s [search string]')
+          .default("s", [ ])
+          .default("l", [ ])
           .demand([ "n" ])
           .alias("n", "name")
           .argv,
@@ -28,29 +30,21 @@ const getStatusesByListName = function (name, callback) {
     });
 }
 
-const getStatusesBySearch = function (search, callback) {
+const getStatusesBySearch = function (search, callback) {\
+    // Note the "result_type" setting below: the ambition is to avoid any
+    // "intelligence" Twitter puts in selecting what to show me and what not
     twitterClient.get("search/tweets.json", { "q": search, "result_type": "recent", "count": MAX_SEARCH_COUNT }, callback);
 }
 
-var tweets = [ ];
-async.parallel([
-    // this is the lists
-    function (callback) {
-        async.map([ ].concat(argv.l), getStatusesByListName, function (err, results) {
-            if (err) return callback(err);
-            tweets = tweets.concat(_.flatten(_.pluck(results, "statuses"), true));
-            callback(null);
-        });
-    },
-    // this is the searches\
-    function (callback) {
-        async.map([ ].concat(argv.s), getStatusesBySearch, function (err, results) {
-            if (err) return callback(err);
-            tweets = tweets.concat(_.flatten(_.pluck(results, "statuses"), true));
-            callback(null);
-        });
-    }
-], function (err) {
+async.map([
+    { "options": [ ].concat(argv.l), "function": getStatusesByListName },
+    { "options": [ ].concat(argv.s), "function": getStatusesBySearch },
+], function (config, callback) {
+    async.map(config.options, config.function, function (err, results) {
+        callback(err, err ? [ ] : _.flatten(_.pluck(results, "statuses"), true));
+    });
+}, function (err, tweets) {
+    tweets = _.flatten(tweets, true);
     // makes the dates into Date objects
     tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
     // sort by created_at, descending
