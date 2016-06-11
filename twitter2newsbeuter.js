@@ -30,7 +30,7 @@ const getStatusesByListName = function (name, callback) {
     });
 }
 
-const getStatusesBySearch = function (search, callback) {\
+const getStatusesBySearch = function (search, callback) {
     // Note the "result_type" setting below: the ambition is to avoid any
     // "intelligence" Twitter puts in selecting what to show me and what not
     twitterClient.get("search/tweets.json", { "q": search, "result_type": "recent", "count": MAX_SEARCH_COUNT }, callback);
