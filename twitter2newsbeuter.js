@@ -4,7 +4,7 @@ const async = require('async'),
       Twitter = require('twitter'),
       Feed = require('feed'),
       argv = require('yargs')
-          .usage('Usage: $0 -n [feed name] -l [list name] -s [search string] --language [ISO 639-1 code]')
+          .usage('Usage: $0 -n feed_name [-l list_name...] [-s search_string...] [--language iso_639_1_code...]')
           .default("s", [ ])
           .default("l", [ ])
           .default("language", [ "en" ])
