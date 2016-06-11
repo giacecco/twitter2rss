@@ -12,8 +12,8 @@ const getListStatusesByName = function (name, callback) {
         if (err) return callback(err);
         var list = lists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
         if (!list) return callback(new Error("The specified list does not exist."));
-        twitterClient.get("lists/statuses.json", { "list_id": list.id }, function(err, statuses, response) {
-            callback(err, { "list": list, "statuses": statuses });
+        twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": 1000 }, function(err, statuses, response) {
+            callback(err, _.extend(list, { "statuses": statuses }));
         });
     });
 }
@@ -23,17 +23,17 @@ getListStatusesByName(argv._[0], function (err, list) {
     list.statuses.forEach(function (s) { s.created_at = new Date(s.created_at); });
     // create the feed
     var feed = new Feed({
-        id:          list.list.name,
-        title:       'Twitter - ' + list.list.name,
+        id:          list.name,
+        title:       'Twitter - ' + list.name,
         link:        'http://example.com/',
         updated:     Math.max(_.pluck(list.statuses, "created_at"))
     });
     list.statuses.forEach(function (tweet) {
         feed.addItem({
             id:             tweet.id_str,
-            title:          tweet.text,
+            title:          "@" + tweet.user.screen_name + " - " + tweet.text,
             date:           new Date(tweet.created_at),
-            link:           "https://twitter.com/account/redirect_by_id/" + tweet.id_str,
+            link:           "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str,
             description:    tweet.text
         });
     });
