@@ -77,11 +77,15 @@ const main = function () {
         });
         tweets.forEach(function (tweet) {
             feed.addItem({
-                id:             tweet.id_str,
-                title:          "@" + tweet.user.screen_name + " - " + tweet.text,
-                date:           tweet.created_at,
-                link:           "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str,
-                description:    tweet.text
+                id: tweet.id_str,
+                author: [ {
+                            "name": tweet.user.name,
+                            "link": 'https://twitter/' + tweet.user.screen_name
+                        } ],
+                title: tweet.text,
+                date: tweet.created_at,
+                link: "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str,
+                description: tweet.text
             });
         });
         console.log(feed.render('atom-1.0'));
