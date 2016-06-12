@@ -4,7 +4,7 @@ const async = require('async'),
       Twitter = require('twitter'),
       Feed = require('feed'),
       argv = require('yargs')
-          .usage('Usage: $0 -n feed_name [-l list_name...] [-s search_string...] [--language iso_639_1_code...]')
+          .usage('Usage: $0 -n feed_name [-l list_name...] [-s search_string...] [--retweets] [--language iso_639_1_code...]')
           .default("s", [ ])
           .default("l", [ ])
           .default("language", [ "en" ])
@@ -32,7 +32,9 @@ const getStatusesByListName = function (name, callback) {
         if (!list) return callback(new Error("The specified list does not exist."));
         twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
             // keeping only tweets in the requested languages
-            statuses = statuses.filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+            statuses = statuses
+                .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
+                .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
             callback(err, _.extend(list, { "statuses": statuses }));
         });
     });
@@ -43,7 +45,9 @@ const getStatusesBySearch = function (search, callback) {
     // "intelligence" Twitter puts in selecting what to show me and what not
     twitterClient.get("search/tweets.json", { "q": search, "result_type": "recent", "count": MAX_SEARCH_COUNT }, function(err, results, response) {
         // keeping only tweets in the requested languages
-        results.statuses = results.statuses.filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+        results.statuses = results.statuses
+            .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
+            .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
         callback(err, results);
     });
 }
