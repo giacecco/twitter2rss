@@ -84,8 +84,7 @@ const main = function () {
                         } ],
                 title: tweet.text,
                 date: tweet.created_at,
-                link: "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str,
-                description: tweet.text
+                link: "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str
             });
         });
         console.log(feed.render('atom-1.0'));
