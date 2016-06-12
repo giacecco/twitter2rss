@@ -79,7 +79,7 @@ const main = function () {
             feed.addItem({
                 id: tweet.id_str,
                 author: [ {
-                            "name": tweet.user.name,
+                            "name": tweet.user.name + " (@" + tweet.user.screen_name + ")",
                             "link": 'https://twitter/' + tweet.user.screen_name
                         } ],
                 title: tweet.text,
