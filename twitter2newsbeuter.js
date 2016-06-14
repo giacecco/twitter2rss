@@ -27,8 +27,7 @@ const twitterClient = new Twitter(JSON.parse(fs.readFileSync(path.join(process.e
 
 const getStatusesByListName = function (name, callback) {
     twitterClient.get("lists/list.json", { }, function(err, lists, response) {
-        console.log(lists);
-        if (err) return callback(err);
+        if (err) return callback(err, [ ]);
         var list = lists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
         if (!list) return callback(new Error("The specified list does not exist."));
         twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
@@ -45,6 +44,7 @@ const getStatusesBySearch = function (search, callback) {
     // Note the "result_type" setting below: the ambition is to avoid any
     // "intelligence" Twitter puts in selecting what to show me and what not
     twitterClient.get("search/tweets.json", { "q": search, "result_type": "recent", "count": MAX_SEARCH_COUNT }, function(err, results, response) {
+        if (err) return callback(err, [ ]);
         // keeping only tweets in the requested languages
         results.statuses = results.statuses
             .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
