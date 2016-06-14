@@ -27,6 +27,7 @@ const twitterClient = new Twitter(JSON.parse(fs.readFileSync(path.join(process.e
 
 const getStatusesByListName = function (name, callback) {
     twitterClient.get("lists/list.json", { }, function(err, lists, response) {
+        console.log(lists);
         if (err) return callback(err);
         var list = lists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
         if (!list) return callback(new Error("The specified list does not exist."));
@@ -62,18 +63,23 @@ const main = function () {
         });
     }, function (err, tweets) {
         tweets = _.flatten(tweets, true);
-        // removes duplicates
+        // removes duplicate ids
         tweets = _.uniq(tweets, function (s) { return s.id_str; });
+        // removes duplicate content, and keeps the oldest identical tweet
+        // TODO: is this really useful?
+        tweets = _.uniq(_.pluck(tweets, "text")).map(function (text) {
+            return _.first(tweets.filter(function (tweet) { return tweet.text === text; }).sort(function (a, b) { return a.created_at - b.created_at; }));
+        });
         // makes the dates into Date objects
         tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
         // sort by created_at, descending
-        tweets.sort(function (a, b) { return a.created_at < b.created_at; });
+        tweets.sort(function (a, b) { return b.created_at - a.created_at; });
         // create the feed
         var feed = new Feed({
-            id:          argv.name,
-            title:       argv.name,
-            link:        'https://github.com/Digital-Contraptions-Imaginarium/twitter2newsbeuter',
-            updated:     Math.max(_.pluck(tweets, "created_at"))
+            id:      argv.name,
+            title:   argv.name,
+            link:    'https://github.com/Digital-Contraptions-Imaginarium/twitter2newsbeuter',
+            updated: Math.max(_.pluck(tweets, "created_at"))
         });
         tweets.forEach(function (tweet) {
             feed.addItem({
