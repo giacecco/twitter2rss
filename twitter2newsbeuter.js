@@ -23,7 +23,7 @@ const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                               // NOTE: apparently anything more than 100 is
                               // ignored.
 
-const twitterClient = new Twitter(JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config', 'twitter2newsbeuter', 'twitter-config.json'), { 'encoding': 'utf8' })));
+const twitterClient = new Twitter(JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config', 'twitter2newsbeuter', 'config'), { 'encoding': 'utf8' })));
 
 const getStatusesByListName = function (name, callback) {
     twitterClient.get("lists/list.json", { }, function(err, lists, response) {
