@@ -1,5 +1,5 @@
 const async = require('async'),
-      fs = require('fs'),
+      fs = require('fs-extra'),
       path = require('path'),
       Twitter = require('twitter'),
       Feed = require('feed'),
@@ -23,33 +23,68 @@ const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                               // NOTE: apparently anything more than 100 is
                               // ignored.
 
-const twitterClient = new Twitter(JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config', 'twitter2newsbeuter', 'twitter-config.json'), { 'encoding': 'utf8' })));
+var CONFIG = JSON.parse(fs.readFileSync(path.join(process.env.HOME, '.config', 'twitter2newsbeuter', 'config'), { 'encoding': 'utf8' }));
+
+const twitterClient = new Twitter(CONFIG.twitter);
+
+const throttle = function (throttleTag, throttleSettings, callback) {
+
+    const purge = function () {
+        // purge all calls older than the 15 minutes window
+        const now = (new Date()).valueOf();
+        CONFIG.throttle[throttleTag] = CONFIG.throttle[throttleTag].filter(function (call) {
+            return now - call <= throttleSettings.time * 1000;
+        });
+    }
+
+    if (!CONFIG.throttle) CONFIG.throttle = { }
+    if (!CONFIG.throttle[throttleTag]) CONFIG.throttle[throttleTag] = [ ]
+    purge();
+    async.whilst(
+        function () { return CONFIG.throttle[throttleTag].length >= throttleSettings.limit },
+        function (callback) {
+            setTimeout(function () {
+                purge();
+                callback(null);
+            }, Math.max(0, Math.min.apply(null, CONFIG.throttle[throttleTag]) + throttleSettings.time * 1000 - (new Date()).valueOf()));
+        },
+        function (err) {
+            CONFIG.throttle[throttleTag].push((new Date()).valueOf());
+            fs.writeFileSync(path.join(process.env.HOME, '.config', 'twitter2newsbeuter', 'config'), JSON.stringify(CONFIG), { 'encoding': 'utf8' });
+            callback(null);
+        }
+    );
+}
 
 const getStatusesByListName = function (name, callback) {
-    twitterClient.get("lists/list.json", { }, function(err, lists, response) {
-        console.log(lists);
-        if (err) return callback(err);
-        var list = lists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
-        if (!list) return callback(new Error("The specified list does not exist."));
-        twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
-            // keeping only tweets in the requested languages
-            statuses = statuses
-                .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
-                .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
-            callback(err, _.extend(list, { "statuses": statuses }));
+    throttle("list", { "limit": 15, "time": 900 }, function () {
+        twitterClient.get("lists/list.json", { }, function(err, lists, response) {
+            console.log(lists);
+            if (err) return callback(err);
+            var list = lists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
+            if (!list) return callback(new Error("The specified list does not exist."));
+            twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
+                // keeping only tweets in the requested languages
+                statuses = statuses
+                    .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
+                    .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+                callback(err, _.extend(list, { "statuses": statuses }));
+            });
         });
     });
 }
 
 const getStatusesBySearch = function (search, callback) {
-    // Note the "result_type" setting below: the ambition is to avoid any
-    // "intelligence" Twitter puts in selecting what to show me and what not
-    twitterClient.get("search/tweets.json", { "q": search, "result_type": "recent", "count": MAX_SEARCH_COUNT }, function(err, results, response) {
-        // keeping only tweets in the requested languages
-        results.statuses = results.statuses
-            .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
-            .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
-        callback(err, results);
+    throttle("search", { "limit": 180, "time": 900 }, function () {
+        // Note the "result_type" setting below: the ambition is to avoid any
+        // "intelligence" Twitter puts in selecting what to show me and what not
+        twitterClient.get("search/tweets.json", { "q": search, "result_type": "recent", "count": MAX_SEARCH_COUNT }, function(err, results, response) {
+            // keeping only tweets in the requested languages
+            results.statuses = results.statuses
+                .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
+                .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+            callback(err, results);
+        });
     });
 }
 
