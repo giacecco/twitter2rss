@@ -7,6 +7,7 @@ const async = require("async"),
       // https://github.com/jhurliman/node-rate-limiter
       Limiter = require('limiter').RateLimiter,
       path = require("path"),
+      // https://github.com/desmondmorris/node-twitter
       Twitter = require("twitter"),
       _ = require("underscore"),
       argv = require('yargs')
@@ -36,7 +37,7 @@ var twitterClient;
 
 // Check the Twitter API rate limiting at https://dev.twitter.com/rest/public/rate-limiting)
 const twitterSearchLimiter = new Limiter(180 * argv.limiter, 15 * 60000),
-      twitterReadLimiter = new Limiter(15  * argv.limiter, 15 * 60000);
+      twitterListLimiter = new Limiter(180  * argv.limiter, 15 * 60000);
 
 const init = function (callback) {
     async.series([
@@ -54,10 +55,10 @@ const init = function (callback) {
 const main = function (callback) {
 
     const getStatusesByListName = function (name, callback) {
-        twitterReadLimiter.removeTokens(1, function() {
+        twitterListLimiter.removeTokens(1, function() {
             twitterClient.get(
                 "lists/list.json",
-                { "include_rts": argv.retweets ? "true" : undefined }, 
+                { "include_rts": argv.retweets ? "true" : undefined },
                 function(err, lists, response) {
                     if (err) return callback(err, [ ]);
                     var list = lists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
