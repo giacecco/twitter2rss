@@ -5,10 +5,8 @@ const async = require("async"),
       Twitter = require("twitter"),
       _ = require("underscore"),
       argv = require('yargs')
-          .usage('Usage: $0 -p feed_name_prefix [--retweets] [--language iso_639_1_code...]')
+          .usage('Usage: $0 [--retweets] [--language iso_639_1_code...]')
           .default("language", [ "en" ])
-          .demand([ "p" ])
-          .alias("p", "prefix")
           .argv;
 
 const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
@@ -114,7 +112,7 @@ const main = function (callback) {
             // create the feed
             var feed = new Feed({
                 id:      configuration.name,
-                title:   argv.prefix + "_" + configuration.name,
+                title:   "twitter2newsbeuter_" + configuration.name,
                 link:    'https://github.com/Digital-Contraptions-Imaginarium/twitter2newsbeuter',
                 updated: Math.max(_.pluck(tweets, "created_at"))
             });
