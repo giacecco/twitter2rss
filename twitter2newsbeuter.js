@@ -55,18 +55,21 @@ const main = function (callback) {
 
     const getStatusesByListName = function (name, callback) {
         twitterReadLimiter.removeTokens(1, function() {
-            twitterClient.get("lists/list.json", { }, function(err, lists, response) {
-                if (err) return callback(err, [ ]);
-                var list = lists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
-                if (!list) return callback(new Error("The specified list does not exist."));
-                twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
-                    // keeping only tweets in the requested languages
-                    statuses = statuses
-                        .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
-                        .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
-                    callback(err, _.extend(list, { "statuses": statuses }));
+            twitterClient.get(
+                "lists/list.json",
+                { "include_rts": argv.retweets ? "true" : undefined }, 
+                function(err, lists, response) {
+                    if (err) return callback(err, [ ]);
+                    var list = lists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
+                    if (!list) return callback(new Error("The specified list does not exist."));
+                    twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
+                        // keeping only tweets in the requested languages
+                        statuses = statuses
+                            .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
+                            .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+                        callback(err, _.extend(list, { "statuses": statuses }));
+                    });
                 });
-            });
         });
     }
 
