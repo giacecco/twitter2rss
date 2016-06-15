@@ -1,6 +1,9 @@
 const async = require("async"),
       Feed = require('feed'),
       fs = require("fs-extra"),
+      // https://github.com/sindresorhus/is-online
+      // overkill?
+      isOnline = require('is-online'),
       // https://github.com/jhurliman/node-rate-limiter
       Limiter = require('limiter').RateLimiter,
       path = require("path"),
@@ -157,8 +160,14 @@ const main = function (callback) {
         function () { return true; },
         function (callback) {
             var startTimestamp = (new Date()).valueOf();
-            cycle(function (err) {
-                setTimeout(callback, Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf()));
+            isOnline(function (err, online) {
+                if (online) {
+                    cycle(function (err) {
+                        setTimeout(callback, Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf()));
+                    });
+                } else {
+                    setTimeout(callback, Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf()));
+                }
             });
         },
         function () { }
