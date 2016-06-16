@@ -136,7 +136,7 @@ const main = function (callback) {
             // create the feed
             var feed = new Feed({
                 id:      configuration.name,
-                title:   "twitter2newsbeuter_" + configuration.name,
+                title:   "twitter2rss_" + configuration.name,
                 link:    'https://github.com/Digital-Contraptions-Imaginarium/twitter2newsbeuter',
                 updated: Math.max(_.pluck(tweets, "created_at"))
             });
