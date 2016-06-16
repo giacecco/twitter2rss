@@ -30,8 +30,8 @@ const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                               // NOTE: apparently anything more than 100 is
                               // ignored.
 
-const CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2newsbeuter"),
-      DATA_PATH = path.join(process.env.HOME, ".local", "twitter2newsbeuter");
+const CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2rss"),
+      DATA_PATH = path.join(process.env.HOME, ".local", "twitter2rss");
 
 var twitterClient;
 

@@ -1,7 +1,7 @@
-twitter2newsbeuter
-==================
+twitter2rss
+===========
 
-_twitter2newsbeuter_ is a script, suitable to be run as a daemon, that produces
+_twitter2rss_ is a script, suitable to be run as a daemon, that produces
 Atom feeds out of sets of Twitter searches and list timelines. The feeds are
 then suitable for consumption by any news feeder, such as
 [Newsbeuter](http://newsbeuter.org/).
@@ -29,13 +29,13 @@ OR @giacecco```.
 
 Any number of lists or searches, including none, can be specified. The script
 will read all configuration files located in
-_$HOME/.config/twitter2newsbeuter/feeds_.
+_$HOME/.config/twitter2rss/feeds_.
 
 The generated output feeds are then rendered into
-_$HOME/.local/twitter2newsbeuter/feeds_, using the same name as the
+_$HOME/.local/twitter2rss/feeds_, using the same name as the
 corresponding JSON files, and with an XML extension.
 
-The file _$HOME/.config/twitter2newsbeuter/config_ is used to specify general
+The file _$HOME/.config/twitter2rss/config_ is used to specify general
 working parameters, including the credentials to access Twitter. Its format is
 described below. The instructions to create these settings is outside of the
 scope of this document.
