@@ -11,7 +11,7 @@ const async = require("async"),
       Twitter = require("twitter"),
       _ = require("underscore"),
       argv = require('yargs')
-          .usage('Usage: $0 [--once] [--refresh refresh_rate_in_minutes] [--retweets] [--language iso_639_1_code...] [--limiter perc_of_max_rate]')
+          .usage('Usage: $0 [--once] [--refresh refresh_rate_in_minutes] [--retweets] [--replies] [--language iso_639_1_code...] [--limiter perc_of_max_rate]')
           .default("refresh", "15")
           .default("limiter", "100")
           .default("language", [ "en" ])
@@ -67,6 +67,7 @@ const main = function (callback) {
                         // keeping only tweets in the requested languages
                         statuses = statuses
                             .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
+                            .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
                             .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
                         callback(err, _.extend(list, { "statuses": statuses }));
                     });
@@ -83,6 +84,7 @@ const main = function (callback) {
                 // keeping only tweets in the requested languages
                 results.statuses = results.statuses
                     .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
+                    .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
                     .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
                 callback(err, results);
             });
