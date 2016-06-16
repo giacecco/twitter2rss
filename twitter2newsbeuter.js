@@ -66,7 +66,7 @@ const main = function (callback) {
                     twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
                         // keeping only tweets in the requested languages
                         statuses = statuses
-                            .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
+                            .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
                             .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
                             .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
                         callback(err, _.extend(list, { "statuses": statuses }));
@@ -83,7 +83,7 @@ const main = function (callback) {
                 if (err) return callback(err, [ ]);
                 // keeping only tweets in the requested languages
                 results.statuses = results.statuses
-                    .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}: /) })
+                    .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
                     .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
                     .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
                 callback(err, results);
