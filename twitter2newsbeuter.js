@@ -11,7 +11,7 @@ const async = require("async"),
       Twitter = require("twitter"),
       _ = require("underscore"),
       argv = require('yargs')
-          .usage('Usage: $0 [--refresh refresh_rate_in_minutes] [--retweets] [--language iso_639_1_code...] [--limiter perc_of_max_rate]')
+          .usage('Usage: $0 [--once] [--refresh refresh_rate_in_minutes] [--retweets] [--language iso_639_1_code...] [--limiter perc_of_max_rate]')
           .default("refresh", "15")
           .default("limiter", "100")
           .default("language", [ "en" ])
@@ -160,17 +160,22 @@ const main = function (callback) {
         });
     }
 
+    var loop = true;
     async.whilst(
-        function () { return true; },
+        function () {
+            const okToRun = loop;
+            loop = !argv.once;
+            return okToRun;
+        },
         function (callback) {
             var startTimestamp = (new Date()).valueOf();
             isOnline(function (err, online) {
                 if (online) {
                     cycle(function (err) {
-                        setTimeout(callback, Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf()));
+                        setTimeout(callback, !loop ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf()));
                     });
                 } else {
-                    setTimeout(callback, Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf()));
+                    setTimeout(callback, !loop ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf()));
                 }
             });
         },
