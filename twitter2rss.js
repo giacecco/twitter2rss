@@ -37,9 +37,9 @@ const CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2rss"),
 var twitterClient;
 
 // Check the Twitter API rate limiting at https://dev.twitter.com/rest/public/rate-limiting)
-const twitterSearchLimiter = new Limiter(180 * argv.limiter, 15 * 60000),
-      twitterListListLimiter = new Limiter(15  * argv.limiter, 15 * 60000);
-      twitterListStatusesLimiter = new Limiter(180  * argv.limiter, 15 * 60000);
+const twitterSearchLimiter = new Limiter(Math.floor(180 * argv.limiter), 15 * 60000),
+      twitterListListLimiter = new Limiter(Math.floor(15  * argv.limiter), 15 * 60000);
+      twitterListStatusesLimiter = new Limiter(Math.floor(180  * argv.limiter), 15 * 60000);
 
 const init = function (callback) {
     async.series([
