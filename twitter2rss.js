@@ -11,7 +11,7 @@ const async = require("async"),
       Twitter = require("twitter"),
       _ = require("underscore"),
       argv = require('yargs')
-          .usage('Usage: $0 [--once] [--refresh refresh_rate_in_minutes] [--retweets] [--replies] [--language iso_639_1_code...] [--limiter perc_of_max_rate]')
+          .usage('Usage: $0 [--debug feed_configuration_file] [--once] [--refresh refresh_rate_in_minutes] [--retweets] [--replies] [--language iso_639_1_code...] [--limiter perc_of_max_rate]')
           .default("refresh", "15")
           .default("limiter", "100")
           .default("language", [ "en" ])
@@ -19,6 +19,7 @@ const async = require("async"),
 
 argv.refresh = parseFloat(argv.refresh) * 60000;
 argv.limiter = parseFloat(argv.limiter) / 100.0;
+if (argv.debug) argv.once = true;
 
 const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                              // by language.
@@ -92,23 +93,27 @@ const main = function (callback) {
     }
 
     const readFeedConfigurations = function (callback) {
-        fs.readdir(path.join(CONFIG_PATH, "feeds"), function (err, entries) {
-            async.filter(entries, function (entry, callback) {
-                fs.lstat(path.join(CONFIG_PATH, "feeds", entry), function (err, stats) {
-                    callback(null, entry.match(/\.json$/) && stats.isFile());
-                });
-            }, function (err, entries) {
-                var configurations = { };
-                async.each(entries, function (entry, callback) {
-                    fs.readFile(path.join(CONFIG_PATH, "feeds", entry), { 'encoding': 'utf8' }, function (err, text) {
-                        configurations[path.basename(entry, ".json")] = _.extend({ "name": path.basename(entry, ".json") }, JSON.parse(text));
-                        callback(err);
+        if (argv.debug) {
+            callback(null, [ _.extend({ "name": "debug" }, JSON.parse(fs.readFileSync(argv.debug, { "encoding": "utf8" }))) ]);
+        } else {
+            fs.readdir(path.join(CONFIG_PATH, "feeds"), function (err, entries) {
+                async.filter(entries, function (entry, callback) {
+                    fs.lstat(path.join(CONFIG_PATH, "feeds", entry), function (err, stats) {
+                        callback(null, entry.match(/\.json$/) && stats.isFile());
                     });
-                }, function (err) {
-                    callback(err, configurations);
+                }, function (err, entries) {
+                    var configurations = { };
+                    async.each(entries, function (entry, callback) {
+                        fs.readFile(path.join(CONFIG_PATH, "feeds", entry), { 'encoding': 'utf8' }, function (err, text) {
+                            configurations[path.basename(entry, ".json")] = _.extend({ "name": path.basename(entry, ".json") }, JSON.parse(text));
+                            callback(err);
+                        });
+                    }, function (err) {
+                        callback(err, configurations);
+                    });
                 });
             });
-        });
+        }
     }
 
     const produceAtomFeed = function (configuration, callback) {
@@ -152,7 +157,7 @@ const main = function (callback) {
                     link: "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str
                 });
             });
-            fs.writeFile(path.join(DATA_PATH, "feeds", configuration.name + ".xml"), feed.render('atom-1.0'), { "encoding": "utf8" }, callback);
+            argv.debug ? console.log(feed.render('atom-1.0')) : fs.writeFile(path.join(DATA_PATH, "feeds", configuration.name + ".xml"), feed.render('atom-1.0'), { "encoding": "utf8" }, callback);
         });
     }
 
