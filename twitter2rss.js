@@ -26,10 +26,12 @@ const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                              // NOTE: I haven't checked if there is a limit to
                              // this, but it definitely can return more than 100
                              // statuses.
-      MAX_SEARCH_COUNT = 100; // No. of max tweets to fetch, before filtering by
+      MAX_SEARCH_COUNT = 100, // No. of max tweets to fetch, before filtering by
                               // language.
                               // NOTE: apparently anything more than 100 is
                               // ignored.
+      // From
+      URL_REGEX = new RegExp("(http|ftp|https)://[\w-]+(\.[\w-]*)+([\w.,@?^=%&amp;:/~+#-]*[\w@?^=%&amp;/~+#-])?");
 
 const CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2rss"),
       DATA_PATH = path.join(process.env.HOME, ".local", "twitter2rss");
@@ -55,6 +57,47 @@ const init = function (callback) {
 }
 
 const main = function (callback) {
+
+    const readFeedConfigurations = function (callback) {
+
+        const getConfigurationFiles = function (callback) {
+
+            var configurationFiles;
+
+            const completed = function () {
+                callback(null, configurationFiles);
+            }
+
+            if (argv.debug) {
+                configurationFiles = [ argv.debug ];
+                completed();
+            } else {
+                fs.readdir(path.join(CONFIG_PATH, "feeds"), function (err, entries) {
+                    async.filter(entries, function (entry, callback) {
+                        fs.lstat(path.join(CONFIG_PATH, "feeds", entry), function (err, stats) {
+                            callback(null, entry.match(/\.json$/) && stats.isFile());
+                        });
+                    }, function (err, results) {
+                        configurationFiles = results.map(function (r) { return path.join(CONFIG_PATH, "feeds", r); });
+                        completed();
+                    });
+                });
+            }
+        }
+
+        getConfigurationFiles(function (err, entries) {
+            if (err || (entries.length === 0)) return callback(err, { });
+            var configurations = { };
+            async.each(entries, function (entry, callback) {
+                fs.readFile(entry, { 'encoding': 'utf8' }, function (err, text) {
+                    configurations[path.basename(entry, ".json")] = _.extend({ "name": path.basename(entry, ".json") }, JSON.parse(text));
+                    callback(err);
+                });
+            }, function (err) {
+                callback(err, configurations);
+            });
+        });
+    }
 
     const getStatusesByListNames = function (listNames, callback) {
         listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
@@ -111,47 +154,6 @@ const main = function (callback) {
         });
     }
 
-    const readFeedConfigurations = function (callback) {
-
-        const getConfigurationFiles = function (callback) {
-
-            var configurationFiles;
-
-            const completed = function () {
-                callback(null, configurationFiles);
-            }
-
-            if (argv.debug) {
-                configurationFiles = [ argv.debug ];
-                completed();
-            } else {
-                fs.readdir(path.join(CONFIG_PATH, "feeds"), function (err, entries) {
-                    async.filter(entries, function (entry, callback) {
-                        fs.lstat(path.join(CONFIG_PATH, "feeds", entry), function (err, stats) {
-                            callback(null, entry.match(/\.json$/) && stats.isFile());
-                        });
-                    }, function (err, results) {
-                        configurationFiles = results.map(function (r) { return path.join(CONFIG_PATH, "feeds", r); });
-                        completed();
-                    });
-                });
-            }
-        }
-
-        getConfigurationFiles(function (err, entries) {
-            if (err || (entries.length === 0)) return callback(err, { });
-            var configurations = { };
-            async.each(entries, function (entry, callback) {
-                fs.readFile(entry, { 'encoding': 'utf8' }, function (err, text) {
-                    configurations[path.basename(entry, ".json")] = _.extend({ "name": path.basename(entry, ".json") }, JSON.parse(text));
-                    callback(err);
-                });
-            }, function (err) {
-                callback(err, configurations);
-            });
-        });
-    }
-
     const produceAtomFeed = function (configuration, callback) {
         var tweets = [ ];
         async.map([
@@ -167,9 +169,10 @@ const main = function (callback) {
             tweets = _.uniq(tweets, function (s) { return s.id_str; });
             // removes duplicate content, and keeps the oldest identical tweet
             // TODO: is this really useful?
-            tweets = _.uniq(_.pluck(tweets, "text")).map(function (text) {
-                return _.first(tweets.filter(function (tweet) { return tweet.text === text; }).sort(function (a, b) { return a.created_at - b.created_at; }));
-            });
+            tweets = _.uniq(_.pluck(tweets, "text").map(function (t) { return t.replace(URL_REGEX, ""); }))
+                .map(function (text) {
+                    return _.first(tweets.filter(function (tweet) { return tweet.text.replace(URL_REGEX, "") === text; }).sort(function (a, b) { return a.created_at - b.created_at; }));
+                });
             // makes the dates into Date objects
             tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
             // sort by created_at, descending
