@@ -84,19 +84,26 @@ const main = function (callback) {
         });
     }
 
-    const getStatusesBySearch = function (search, callback) {
-        twitterSearchLimiter.removeTokens(1, function () {
-            // Note the "result_type" setting below: the ambition is to avoid any
-            // "intelligence" Twitter puts in selecting what to show me and what not
-            twitterClient.get("search/tweets.json", { "q": search, "result_type": "recent", "count": MAX_SEARCH_COUNT }, function(err, results, response) {
-                if (err) return callback(err, [ ]);
-                // keeping only tweets in the requested languages
-                results = results.statuses
-                    .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
-                    .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
-                    .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
-                callback(err, results);
+    const getStatusesBySearch = function (searches, callback) {
+        searches = [ ].concat(searches);
+        async.map(searches, function (search, mapCallback) {
+            twitterSearchLimiter.removeTokens(1, function () {
+                twitterClient.get(
+                    "search/tweets.json",
+                    { "q": search,
+                      // Note the "result_type" setting below: the ambition is
+                      // to avoid any "intelligence" Twitter puts in selecting
+                      // what to show me and what not
+                      "result_type": "recent",
+                      "count": MAX_SEARCH_COUNT },
+                    mapCallback);
             });
+        }, function (err, results) {
+            results = _.flatten(_.pluck(_.flatten(results, true), "statuses"), true)
+                .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
+                .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
+                .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+            callback(err, results);
         });
     }
 
