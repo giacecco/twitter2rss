@@ -13,12 +13,12 @@ const async = require("async"),
       argv = require('yargs')
           .usage('Usage: $0 [--debug feed_configuration_file] [--once] [--refresh refresh_rate_in_minutes] [--retweets] [--replies] [--language iso_639_1_code...] [--limiter perc_of_max_rate]')
           .default("refresh", "15")
-          .default("limiter", "100")
+          .default("limiter", "90")
           .default("language", [ "en" ])
           .argv;
 
 argv.refresh = parseFloat(argv.refresh) * 60000;
-argv.limiter = parseFloat(argv.limiter) / 100.0;
+argv.limiter = Math.min(1.0, parseFloat(argv.limiter) / 100.0);
 if (argv.debug) argv.once = true;
 
 const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
@@ -38,7 +38,8 @@ var twitterClient;
 
 // Check the Twitter API rate limiting at https://dev.twitter.com/rest/public/rate-limiting)
 const twitterSearchLimiter = new Limiter(180 * argv.limiter, 15 * 60000),
-      twitterListLimiter = new Limiter(180  * argv.limiter, 15 * 60000);
+      twitterListListLimiter = new Limiter(15  * argv.limiter, 15 * 60000);
+      twitterListStatusesLimiter = new Limiter(180  * argv.limiter, 15 * 60000);
 
 const init = function (callback) {
     async.series([
@@ -57,7 +58,7 @@ const main = function (callback) {
 
     const getStatusesByListNames = function (listNames, callback) {
         listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
-        twitterListLimiter.removeTokens(1, function() {
+        twitterListListLimiter.removeTokens(1, function() {
             twitterClient.get(
                 "lists/list.json",
                 // TODO: isn't the line below in the wrong place?
@@ -67,7 +68,7 @@ const main = function (callback) {
                     lists = lists.filter(function (l) { return _.contains(listNames, l.name.toLowerCase()) });
                     if (lists.length === 0) return callback(new Error("None of the specified names correspond to existing subscribed lists."), [ ]);
                     async.map(lists, function (list, mapCallback) {
-                        twitterListLimiter.removeTokens(1, function() {
+                        twitterListStatusesLimiter.removeTokens(1, function() {
                             twitterClient.get(
                                 "lists/statuses.json",
                                 { "list_id": list.id_str,
