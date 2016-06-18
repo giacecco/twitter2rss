@@ -62,16 +62,21 @@ const main = function (callback) {
                 "lists/list.json",
                 // TODO: isn't the line below in the wrong place?
                 { "include_rts": argv.retweets ? "true" : undefined },
-                function(err, lists, response) {
+                function (err, lists, response) {
                     if (err) return callback(err, [ ]);
                     lists = lists.filter(function (l) { return _.contains(listNames, l.name.toLowerCase()) });
                     if (lists.length === 0) return callback(new Error("None of the specified names correspond to existing subscribed lists."), [ ]);
                     async.map(lists, function (list, mapCallback) {
                         twitterListLimiter.removeTokens(1, function() {
-                            twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, mapCallback);
+                            twitterClient.get(
+                                "lists/statuses.json",
+                                { "list_id": list.id_str,
+                                  "count": MAX_LIST_COUNT },
+                                mapCallback);
                         });
                     }, function (err, results) {
-                        results = _.flatten(_.pluck(_.flatten(results, true), "statuses"), true)
+                        if (err) return callback(err, [ ]);
+                        results = _.flatten(_.flatten(results, true), true)
                             .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
                             .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
                             .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
@@ -96,7 +101,8 @@ const main = function (callback) {
                     mapCallback);
             });
         }, function (err, results) {
-            results = _.flatten(_.pluck(_.flatten(results, true), "statuses"), true)
+            if (err) return callback(err, [ ]);
+            results = _.flatten(_.pluck(_.flatten(results), "statuses"))
                 .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
                 .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
                 .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
@@ -105,27 +111,44 @@ const main = function (callback) {
     }
 
     const readFeedConfigurations = function (callback) {
-        if (argv.debug) {
-            callback(null, [ _.extend({ "name": "debug" }, JSON.parse(fs.readFileSync(argv.debug, { "encoding": "utf8" }))) ]);
-        } else {
-            fs.readdir(path.join(CONFIG_PATH, "feeds"), function (err, entries) {
-                async.filter(entries, function (entry, callback) {
-                    fs.lstat(path.join(CONFIG_PATH, "feeds", entry), function (err, stats) {
-                        callback(null, entry.match(/\.json$/) && stats.isFile());
-                    });
-                }, function (err, entries) {
-                    var configurations = { };
-                    async.each(entries, function (entry, callback) {
-                        fs.readFile(path.join(CONFIG_PATH, "feeds", entry), { 'encoding': 'utf8' }, function (err, text) {
-                            configurations[path.basename(entry, ".json")] = _.extend({ "name": path.basename(entry, ".json") }, JSON.parse(text));
-                            callback(err);
+
+        const getConfigurationFiles = function (callback) {
+
+            var configurationFiles;
+
+            const completed = function () {
+                callback(null, configurationFiles);
+            }
+
+            if (argv.debug) {
+                configurationFiles = [ argv.debug ];
+                completed();
+            } else {
+                fs.readdir(path.join(CONFIG_PATH, "feeds"), function (err, entries) {
+                    async.filter(entries, function (entry, callback) {
+                        fs.lstat(path.join(CONFIG_PATH, "feeds", entry), function (err, stats) {
+                            callback(null, entry.match(/\.json$/) && stats.isFile());
                         });
-                    }, function (err) {
-                        callback(err, configurations);
+                    }, function (err, results) {
+                        configurationFiles = results.map(function (r) { return path.join(CONFIG_PATH, "feeds", r); });
+                        completed();
                     });
                 });
-            });
+            }
         }
+
+        getConfigurationFiles(function (err, entries) {
+            if (err || (entries.length === 0)) return callback(err, { });
+            var configurations = { };
+            async.each(entries, function (entry, callback) {
+                fs.readFile(entry, { 'encoding': 'utf8' }, function (err, text) {
+                    configurations[path.basename(entry, ".json")] = _.extend({ "name": path.basename(entry, ".json") }, JSON.parse(text));
+                    callback(err);
+                });
+            }, function (err) {
+                callback(err, configurations);
+            });
+        });
     }
 
     const produceAtomFeed = function (configuration, callback) {
