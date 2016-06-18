@@ -55,24 +55,30 @@ const init = function (callback) {
 
 const main = function (callback) {
 
-    const getStatusesByListName = function (name, callback) {
+    const getStatusesByListNames = function (listNames, callback) {
+        listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
         twitterListLimiter.removeTokens(1, function() {
             twitterClient.get(
                 "lists/list.json",
+                // TODO: isn't the line below in the wrong place?
                 { "include_rts": argv.retweets ? "true" : undefined },
                 function(err, lists, response) {
                     if (err) return callback(err, [ ]);
-                    var list = lists.find(function (l) { return l.name.toLowerCase() === name.toLowerCase(); });
-                    if (!list) return callback(new Error("The specified list does not exist."));
-                    twitterListLimiter.removeTokens(1, function() {
-                        twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
-                            // keeping only tweets in the requested languages
-                            statuses = statuses
-                                .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
-                                .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
-                                .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
-                            callback(err, _.extend(list, { "statuses": statuses }));
+                    lists = lists.filter(function (l) { return _.contains(listNames, l.name.toLowerCase()) });
+                    if (lists.length === 0) return callback(new Error("None of the specified names correspond to existing subscribed lists."), [ ]);
+                    async.map(lists, function (list, callback) {
+                        twitterListLimiter.removeTokens(1, function() {
+                            twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
+                                // keeping only tweets in the requested languages
+                                statuses = statuses
+                                    .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
+                                    .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
+                                    .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+                                callback(err, statuses);
+                            });
                         });
+                    }, function (err, results) {
+                        callback(err, _.flatten(results, true));
                     });
                 });
         });
@@ -85,7 +91,7 @@ const main = function (callback) {
             twitterClient.get("search/tweets.json", { "q": search, "result_type": "recent", "count": MAX_SEARCH_COUNT }, function(err, results, response) {
                 if (err) return callback(err, [ ]);
                 // keeping only tweets in the requested languages
-                results.statuses = results.statuses
+                results = results.statuses
                     .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
                     .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
                     .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
@@ -121,11 +127,11 @@ const main = function (callback) {
     const produceAtomFeed = function (configuration, callback) {
         var tweets = [ ];
         async.map([
-            { "options": [ ].concat(configuration.lists), "function": getStatusesByListName },
+            { "options": [ ].concat(configuration.lists), "function": getStatusesByListNames },
             { "options": [ ].concat(configuration.searches), "function": getStatusesBySearch },
         ], function (config, callback) {
             async.map(config.options, config.function, function (err, results) {
-                callback(err, err ? [ ] : _.flatten(_.pluck(results, "statuses"), true));
+                callback(err, err ? [ ] : _.flatten(results, true));
             });
         }, function (err, results) {
             tweets = _.flatten(results, true);
