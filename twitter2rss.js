@@ -66,19 +66,16 @@ const main = function (callback) {
                     if (err) return callback(err, [ ]);
                     lists = lists.filter(function (l) { return _.contains(listNames, l.name.toLowerCase()) });
                     if (lists.length === 0) return callback(new Error("None of the specified names correspond to existing subscribed lists."), [ ]);
-                    async.map(lists, function (list, callback) {
+                    async.map(lists, function (list, mapCallback) {
                         twitterListLimiter.removeTokens(1, function() {
-                            twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, function(err, statuses, response) {
-                                // keeping only tweets in the requested languages
-                                statuses = statuses
-                                    .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
-                                    .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
-                                    .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
-                                callback(err, statuses);
-                            });
+                            twitterClient.get("lists/statuses.json", { "list_id": list.id_str, "count": MAX_LIST_COUNT }, mapCallback);
                         });
                     }, function (err, results) {
-                        callback(err, _.flatten(results, true));
+                        results = _.flatten(_.pluck(_.flatten(results, true), "statuses"), true)
+                            .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
+                            .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
+                            .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+                        callback(err, results);
                     });
                 });
         });
