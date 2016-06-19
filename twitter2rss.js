@@ -30,7 +30,10 @@ const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                               // language.
                               // NOTE: apparently anything more than 100 is
                               // ignored.
-      // From
+      // A Twitter burst is defined by two tweets being published at most this
+      // close (milliseconds)
+      TWEET_BURST = 60000,
+      // From ?
       URL_REGEX = new RegExp("(http|ftp|https)://[\w-]+(\.[\w-]*)+([\w.,@?^=%&amp;:/~+#-]*[\w@?^=%&amp;/~+#-])?");
 
 const CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2rss"),
@@ -165,16 +168,31 @@ const main = function (callback) {
             });
         }, function (err, results) {
             tweets = _.flatten(results, true);
+
             // removes duplicate ids
             tweets = _.uniq(tweets, function (s) { return s.id_str; });
+
             // removes duplicate content, and keeps the oldest identical tweet
             // TODO: is this really useful?
             tweets = _.uniq(_.pluck(tweets, "text").map(function (t) { return t.replace(URL_REGEX, ""); }))
                 .map(function (text) {
                     return _.first(tweets.filter(function (tweet) { return tweet.text.replace(URL_REGEX, "") === text; }).sort(function (a, b) { return a.created_at - b.created_at; }));
                 });
+
             // makes the dates into Date objects
             tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
+
+            // aggregates user bursts into one article only
+            var tweetsByUsername = { };
+            tweets = _.uniq(_.pluck(_.pluck(tweets, "user"), "name")).map(function (username) {
+                return tweets.filter(function (tweet) { return tweet.user.name === username; });
+            }).reduce(function (memo, userTweets) {
+                userTweets.sort(function (a, b) { return a.created_at - b.created_at; });
+
+
+
+            }, [ ]);
+
             // sort by created_at, descending
             tweets.sort(function (a, b) { return b.created_at - a.created_at; });
             // create the feed
@@ -191,7 +209,7 @@ const main = function (callback) {
                                 "name": tweet.user.name + " (@" + tweet.user.screen_name + ")",
                                 "link": 'https://twitter/' + tweet.user.screen_name
                             } ],
-                    title: tweet.text,
+                    title: "@" + tweet.user.screen_name + ": " + tweet.text,
                     date: tweet.created_at,
                     link: "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str
                 });
@@ -229,6 +247,10 @@ const main = function (callback) {
     );
 }
 
+/*
 init(function (err) {
     main();
 })
+*/
+
+console.log(_.pluck(_.pluck([{ cippa: { lippa: 3 }}], "cippa"), "lippa"));
