@@ -32,7 +32,7 @@ const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                               // ignored.
       // A Twitter burst is defined by two tweets being published at most this
       // close (milliseconds)
-      TWEET_BURST = 60000,
+      TWEET_BURST = 180000,
       // From ?
       URL_REGEX = new RegExp("(http|ftp|https)://[\w-]+(\.[\w-]*)+([\w.,@?^=%&amp;:/~+#-]*[\w@?^=%&amp;/~+#-])?");
 
@@ -57,6 +57,24 @@ const init = function (callback) {
             });
         }
     ], callback);
+}
+
+const bucketTweetsByTime = function (tweets, lapse) {
+    tweets.sort(function (a, b) { return a.created_at - b.created_at; });
+    var results = [ ];
+    tweets.forEach(function (e) {
+        var grouped = false;
+        for (var i = 0; !grouped && (i < results.length); i++) {
+            if (_.some(results[i], function (f) {
+                return Math.abs(e.created_at - f.created_at) <= lapse;
+            })) {
+                grouped = true;
+                results[i] = results[i].concat(e);
+            }
+        }
+        if (!grouped) results = results.concat([[ e ]]);
+    });
+    return results;
 }
 
 const main = function (callback) {
@@ -167,6 +185,7 @@ const main = function (callback) {
                 callback(err, err ? [ ] : _.flatten(results, true));
             });
         }, function (err, results) {
+
             tweets = _.flatten(results, true);
 
             // removes duplicate ids
@@ -182,19 +201,28 @@ const main = function (callback) {
             // makes the dates into Date objects
             tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
 
-            // aggregates user bursts into one article only
-            var tweetsByUsername = { };
-            tweets = _.uniq(_.pluck(_.pluck(tweets, "user"), "name")).map(function (username) {
-                return tweets.filter(function (tweet) { return tweet.user.name === username; });
-            }).reduce(function (memo, userTweets) {
-                userTweets.sort(function (a, b) { return a.created_at - b.created_at; });
-
-
-
-            }, [ ]);
+            // aggregate user "bursts"
+            tweets = _.flatten(_.uniq(_.pluck(_.pluck(tweets, "user"), "screen_name")).map(function (screenName) {
+                return tweets.filter(function (t) { return t.user.screen_name === screenName; });
+            }).map(function (userTweets) {
+                return bucketTweetsByTime(userTweets, TWEET_BURST).map(function (tweetsGroup) {
+                    var newTweet = tweetsGroup[0];
+                    for (var i = 1; i < tweetsGroup.length; i++)
+                        newTweet.text += (
+                            "<br>" +
+                            ("0" + tweetsGroup[i].created_at.getHours()).slice(-2) +
+                            ":" +
+                            ("0" + tweetsGroup[i].created_at.getMinutes()).slice(-2) +
+                            " - " +
+                            tweetsGroup[i].text
+                        );
+                    return newTweet;
+                });
+            }), true);
 
             // sort by created_at, descending
             tweets.sort(function (a, b) { return b.created_at - a.created_at; });
+
             // create the feed
             var feed = new Feed({
                 id:      configuration.name,
@@ -209,7 +237,8 @@ const main = function (callback) {
                                 "name": tweet.user.name + " (@" + tweet.user.screen_name + ")",
                                 "link": 'https://twitter/' + tweet.user.screen_name
                             } ],
-                    title: "@" + tweet.user.screen_name + ": " + tweet.text,
+                    title: "@" + tweet.user.screen_name + ": " + tweet.text.split("\n")[0],
+                    description: tweet.text,
                     date: tweet.created_at,
                     link: "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str
                 });
@@ -247,10 +276,6 @@ const main = function (callback) {
     );
 }
 
-/*
 init(function (err) {
     main();
-})
-*/
-
-console.log(_.pluck(_.pluck([{ cippa: { lippa: 3 }}], "cippa"), "lippa"));
+});
