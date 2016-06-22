@@ -188,6 +188,11 @@ const main = function (callback) {
 
             tweets = _.flatten(results, true);
 
+            // drops all tweets that match any of the "drop" regular expressions
+            // defined in the configuration
+            configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString); }) : null;
+            if (configuration.drops) tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regexp); }); });
+
             // removes duplicate ids
             tweets = _.uniq(tweets, function (s) { return s.id_str; });
 
@@ -240,7 +245,7 @@ const main = function (callback) {
                     title:
                         "@"
                         + tweet.user.screen_name
-                        + (tweet.text.split("<br>").length > 2 ? " (" + (tweet.text.split("<br>").length - 1) + ")" : "") 
+                        + (tweet.text.split("<br>").length > 2 ? " (" + (tweet.text.split("<br>").length - 1) + ")" : "")
                         + ": " + tweet.text.split("\n")[0],
                     description: tweet.text,
                     date: tweet.created_at,
