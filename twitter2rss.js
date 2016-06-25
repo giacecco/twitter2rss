@@ -245,7 +245,7 @@ const main = function (callback) {
                     title:
                         "@"
                         + tweet.user.screen_name
-                        + (tweet.text.split("<br>").length > 2 ? " (" + (tweet.text.split("<br>").length - 1) + ")" : "")
+                        + (tweet.text.split("<br>").length > 2 ? " (" + tweet.text.split("<br>").length + ")" : "")
                         + ": " + tweet.text.split("\n")[0],
                     description: tweet.text,
                     date: tweet.created_at,
