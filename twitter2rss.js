@@ -190,8 +190,10 @@ const main = function (callback) {
 
             // drops all tweets that match any of the "drop" regular expressions
             // defined in the configuration
-            configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString); }) : null;
-            if (configuration.drops) tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regexp); }); });
+            configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString); }) : [ ];
+            configuration.drops.forEach(function (regexp) {
+                tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regexp); }); });
+            });
 
             // removes duplicate ids
             tweets = _.uniq(tweets, function (s) { return s.id_str; });
