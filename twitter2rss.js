@@ -112,7 +112,7 @@ const main = function (callback) {
                     callback(null, lists);
                 });
         });
-    }, function () { return Math.floor((new Date()).valueOf() / 600000); });
+    }, function () { return Math.floor((new Date()).valueOf() / (argv.refresh * 60000)); });
 
     const getListsByListNames = function (listNames, callback) {
         listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
@@ -123,7 +123,7 @@ const main = function (callback) {
         });
     }
 
-    const getStatusesByListNames = function (listNames, callback) {
+    const getStatusesByListNames = async.memoize(function (listNames, callback) {
         getListsByListNames(listNames, function (err, lists) {
             if (err) return callback(err);
             async.map(lists, function (list, mapCallback) {
@@ -144,9 +144,9 @@ const main = function (callback) {
                 callback(null, results);
             });
         });
-    }
+    }, function (listNames) { return JSON.stringify(listNames) + "_" + Math.floor((new Date()).valueOf() / (argv.refresh * 60000)); });
 
-    const getStatusesBySearch = function (searches, callback) {
+    const getStatusesBySearch = async.memoize(function (searches, callback) {
         searches = [ ].concat(searches);
         async.map(searches, function (search, mapCallback) {
             twitterSearchLimiter.removeTokens(1, function () {
@@ -169,7 +169,7 @@ const main = function (callback) {
                 .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
             callback(null, results);
         });
-    }
+    }, function (searches) { return JSON.stringify(searches) + "_" + Math.floor((new Date()).valueOf() / (argv.refresh * 60000)); });
 
     const fetchTweets = function (configuration, callback) {
         async.map([
