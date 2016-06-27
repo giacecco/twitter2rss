@@ -100,8 +100,7 @@ const main = function (callback) {
     }
 
     // Note this function is memoised to cache its results for 10 minutes
-    const getListsByListNames = async.memoize(function (listNames, callback) {
-        listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
+    const getAllLists = async.memoize(function (callback) {
         twitterListLimiter.removeTokens(1, function() {
             console.log((new Date()) + " lists/list.json");
             twitterClient.get(
@@ -110,11 +109,19 @@ const main = function (callback) {
                 { "include_rts": argv.retweets ? "true" : undefined },
                 function (err, lists, response) {
                     if (err) return callback(err);
-                    lists = lists.filter(function (l) { return _.contains(listNames, l.name.toLowerCase()) });
                     callback(null, lists);
                 });
         });
-    }, function () { return (new Date()).valueOf() % 600000; });
+    }, function () { return Math.floor((new Date()).valueOf() / 600000); });
+
+    const getListsByListNames = function (listNames, callback) {
+        listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
+        getAllLists(function (err, lists) {
+            if (err) return callback(err);
+            lists = lists.filter(function (l) { return _.contains(listNames, l.name.toLowerCase()) });
+            callback(null, lists);
+        });
+    }
 
     const getStatusesByListNames = function (listNames, callback) {
         getListsByListNames(listNames, function (err, lists) {
