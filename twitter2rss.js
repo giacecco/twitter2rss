@@ -102,7 +102,6 @@ const main = function (callback) {
     // Note this function is memoised to cache its results for 10 minutes
     const getAllLists = async.memoize(function (callback) {
         twitterListLimiter.removeTokens(1, function() {
-            console.log((new Date()) + " lists/list.json");
             twitterClient.get(
                 "lists/list.json",
                 // TODO: isn't the line below in the wrong place?
@@ -119,31 +118,34 @@ const main = function (callback) {
         getAllLists(function (err, lists) {
             if (err) return callback(err);
             lists = lists.filter(function (l) { return _.contains(listNames, l.name.toLowerCase()) });
-            callback(null, lists);
+            callback(null, lists.length === 0 ? null : (lists.length === 1 ? lists[0] : lists));
         });
     }
 
     const getStatusesByListNames = async.memoize(function (listNames, callback) {
-        getListsByListNames(listNames, function (err, lists) {
-            if (err) return callback(err);
-            async.map(lists, function (list, mapCallback) {
+        listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
+        if (listNames.length > 1) {
+            async.map(listNames, getStatusesByListNames, function (err, results) {
+                callback(err, err ? null : _.flatten(results, true));
+            });
+        } else {
+            getListsByListNames(listNames[0], function (err, list) {
                 twitterListLimiter.removeTokens(1, function() {
-                    console.log((new Date()) + " lists/statuses.json");
                     twitterClient.get(
                         "lists/statuses.json",
                         { "list_id": list.id_str,
                           "count": MAX_LIST_COUNT },
-                          mapCallback);
+                          function (err, results) {
+                              callback(err, err ? null :
+                                  results
+                                      .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
+                                      .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
+                                      .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); })
+                              );
+                          });
                 });
-            }, function (err, results) {
-                if (err) return callback(err, [ ]);
-                results = _.flatten(_.flatten(results, true), true)
-                    .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
-                    .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
-                    .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
-                callback(null, results);
             });
-        });
+        }
     }, function (listNames) { return JSON.stringify(listNames) + "_" + Math.floor((new Date()).valueOf() / (argv.refresh * 60000)); });
 
     const getStatusesBySearch = async.memoize(function (searches, callback) {
@@ -154,7 +156,6 @@ const main = function (callback) {
             });
         } else {
             twitterSearchLimiter.removeTokens(1, function () {
-                console.log((new Date()) + " search/tweets.json");
                 twitterClient.get(
                     "search/tweets.json",
                     { "q": searches[0],
@@ -247,6 +248,10 @@ const main = function (callback) {
         // sort by created_at, descending
         // TODO: is this necessary?
         tweets.sort(function (a, b) { return b.created_at - a.created_at; });
+        if (argv.debug) {
+            console.log(JSON.stringify(tweets));
+            return callback(null);
+        }
         // create the feed
         var feed = new Feed({
             id:      configuration.name,
@@ -271,15 +276,10 @@ const main = function (callback) {
                 link: "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str
             });
         });
-        if (argv.debug) {
-            console.log(feed.render('atom-1.0'));
-            return callback(null);
-        } else {
-            fs.writeFile(
-                path.join(DATA_PATH, "feeds", configuration.name + ".xml"),
-                feed.render('atom-1.0'), { "encoding": "utf8" },
-                callback);
-        }
+        fs.writeFile(
+            path.join(DATA_PATH, "feeds", configuration.name + ".xml"),
+            feed.render('atom-1.0'), { "encoding": "utf8" },
+            callback);
     }
 
     const cycle = function (callback) {
