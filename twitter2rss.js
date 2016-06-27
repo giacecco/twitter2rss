@@ -113,15 +113,21 @@ const main = function (callback) {
         });
     }, function () { return Math.floor((new Date()).valueOf() / (argv.refresh * 60000)); });
 
+    // Returns an array of Twitter list objects whose names are included in
+    // _listNames_ (case-insensitive). The array is empty if no matching name
+    // could be found.
     const getListsByListNames = function (listNames, callback) {
         listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
         getAllLists(function (err, lists) {
             if (err) return callback(err);
             lists = lists.filter(function (l) { return _.contains(listNames, l.name.toLowerCase()) });
-            callback(null, lists.length === 0 ? null : (lists.length === 1 ? lists[0] : lists));
+            callback(null, lists);
         });
     }
 
+    // Returns an array of the max possible number of Twitter statuses from all
+    // Twitter lists whose names are included in _list_names. Each list provides
+    // a max of _MAX_LIST_COUNT_ statuses.
     const getStatusesByListNames = async.memoize(function (listNames, callback) {
         listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
         if (listNames.length > 1) {
@@ -130,6 +136,9 @@ const main = function (callback) {
             });
         } else {
             getListsByListNames(listNames[0], function (err, list) {
+                if (err) return callback(err);
+                if (list.length < 1) return callback (new Error("List \"" + listName[0] + "\" could not be found.\""));
+                list = list[0];
                 twitterListLimiter.removeTokens(1, function() {
                     twitterClient.get(
                         "lists/statuses.json",
