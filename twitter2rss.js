@@ -99,9 +99,11 @@ const main = function (callback) {
         });
     }
 
-    const getListsByListNames = function (listNames, callback) {
+    // Note this function is memoised to cache its results for 10 minutes
+    const getListsByListNames = async.memoize(function (listNames, callback) {
         listNames = [ ].concat(listNames).map(function (listName) { return listName.toLowerCase(); });
         twitterListLimiter.removeTokens(1, function() {
+            console.log((new Date()) + " lists/list.json");
             twitterClient.get(
                 "lists/list.json",
                 // TODO: isn't the line below in the wrong place?
@@ -112,13 +114,14 @@ const main = function (callback) {
                     callback(null, lists);
                 });
         });
-    }
+    }, function () { return (new Date()).valueOf() % 600000; });
 
     const getStatusesByListNames = function (listNames, callback) {
         getListsByListNames(listNames, function (err, lists) {
             if (err) return callback(err);
             async.map(lists, function (list, mapCallback) {
                 twitterListLimiter.removeTokens(1, function() {
+                    console.log((new Date()) + " lists/statuses.json");
                     twitterClient.get(
                         "lists/statuses.json",
                         { "list_id": list.id_str,
@@ -140,6 +143,7 @@ const main = function (callback) {
         searches = [ ].concat(searches);
         async.map(searches, function (search, mapCallback) {
             twitterSearchLimiter.removeTokens(1, function () {
+                console.log((new Date()) + " search/tweets.json");
                 twitterClient.get(
                     "search/tweets.json",
                     { "q": search,
