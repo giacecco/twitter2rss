@@ -148,27 +148,31 @@ const main = function (callback) {
 
     const getStatusesBySearch = async.memoize(function (searches, callback) {
         searches = [ ].concat(searches);
-        async.map(searches, function (search, mapCallback) {
+        if (searches.length > 1) {
+            async.map(searches, getStatusesBySearch, function (err, results) {
+                callback(err, err ? null : _.pluck(_.flatten(results, true), "statuses"));
+            });
+        } else {
             twitterSearchLimiter.removeTokens(1, function () {
                 console.log((new Date()) + " search/tweets.json");
                 twitterClient.get(
                     "search/tweets.json",
-                    { "q": search,
+                    { "q": searches[0],
                       // Note the "result_type" setting below: the ambition is
                       // to avoid any "intelligence" Twitter puts in selecting
                       // what to show me and what not
                       "result_type": "recent",
                       "count": MAX_SEARCH_COUNT },
-                    mapCallback);
+                    function (err, results) {
+                        callback(err, err ? null :
+                            results.statuses
+                                .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
+                                .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
+                                .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); })
+                        );
+                    });
             });
-        }, function (err, results) {
-            if (err) return callback(err);
-            results = _.flatten(_.pluck(_.flatten(results), "statuses"))
-                .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
-                .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
-                .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
-            callback(null, results);
-        });
+        }
     }, function (searches) { return JSON.stringify(searches) + "_" + Math.floor((new Date()).valueOf() / (argv.refresh * 60000)); });
 
     const fetchTweets = function (configuration, callback) {
@@ -240,8 +244,6 @@ const main = function (callback) {
     }
 
     const makeFeed = function (configuration, tweets, callback) {
-        // *** DEBUG ONLY
-        return callback(null);
         // sort by created_at, descending
         // TODO: is this necessary?
         tweets.sort(function (a, b) { return b.created_at - a.created_at; });
