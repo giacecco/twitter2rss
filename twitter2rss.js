@@ -191,7 +191,7 @@ const main = function (callback) {
             // drops all tweets that match any of the "drop" regular expressions
             // defined in the configuration
             configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString); }) : [ ];
-            tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regexp); }); });
+            tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp); }); });
 
             // removes duplicate ids
             tweets = _.uniq(tweets, function (s) { return s.id_str; });
