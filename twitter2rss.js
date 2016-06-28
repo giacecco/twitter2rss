@@ -11,12 +11,22 @@ const async = require("async"),
       Twitter = require("twitter"),
       _ = require("underscore"),
       argv = require('yargs')
-          .usage('Usage: $0 [--debug feed_configuration_file] [--once] [--refresh refresh_rate_in_minutes] [--retweets] [--replies] [--language iso_639_1_code...] [--limiter perc_of_max_rate]')
+          .usage("Usage: $0 \
+              [--debug path_to_feed_configuration_file] \
+              [--once] \
+              [--refresh refresh_rate_in_minutes] \
+              [--retweets] \
+              [--replies] \
+              [--language iso_639_1_code...] \
+              [--limiter perc_of_max_rate] \
+          ")
           .default("refresh", "15")
           .default("limiter", "90")
           .default("language", [ "en" ])
           .argv;
 
+// argv.refresh is the minimum time in milliseconds between two full refreshes
+// of all feeds; note only one refresh takes place at any one time
 argv.refresh = parseFloat(argv.refresh) * 60000;
 argv.limiter = Math.min(1.0, parseFloat(argv.limiter) / 100.0);
 if (argv.debug) argv.once = true;
