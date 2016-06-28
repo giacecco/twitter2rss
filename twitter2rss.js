@@ -107,6 +107,7 @@ const main = function (callback) {
                 // TODO: isn't the line below in the wrong place?
                 { "include_rts": argv.retweets ? "true" : undefined },
                 function (err, lists, response) {
+                    if (err) return response;
                     if (err) return callback(err);
                     callback(null, lists);
                 });
@@ -144,7 +145,8 @@ const main = function (callback) {
                         "lists/statuses.json",
                         { "list_id": list.id_str,
                           "count": MAX_LIST_COUNT },
-                          function (err, results) {
+                          function (err, results, response) {
+                              if (err) return response;
                               callback(err, err ? null :
                                   results
                                       .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
@@ -173,7 +175,8 @@ const main = function (callback) {
                       // what to show me and what not
                       "result_type": "recent",
                       "count": MAX_SEARCH_COUNT },
-                    function (err, results) {
+                    function (err, results, response) {
+                        if (err) return response;
                         callback(err, err ? null :
                             results.statuses
                                 .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
@@ -312,26 +315,16 @@ const main = function (callback) {
         });
     }
 
-    var loop = true;
-    async.whilst(
-        function () {
-            const okToRun = loop;
-            loop = !argv.once;
-            return okToRun;
-        },
+    async.doWhilst(
         function (callback) {
             var startTimestamp = (new Date()).valueOf();
             isOnline(function (err, online) {
-                if (online) {
-                    cycle(function (err) {
-                        setTimeout(callback, !loop ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf()));
-                    });
-                } else {
-                    setTimeout(callback, !loop ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf()));
-                }
+                const waitAndNextCycle = function () { setTimeout(callback, argv.once ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf())); }
+                if (!err && online) { cycle(waitAndNextCycle) } else { waitAndNextCycle(); }
             });
         },
-        function () { }
+        function () { return !argv.once; },
+        function () { } // this is never run unless argv.once
     );
 }
 
