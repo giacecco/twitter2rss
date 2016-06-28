@@ -231,10 +231,11 @@ const main = function (callback) {
             return results;
         }
 
-        // drops all tweets that match any of the "drop" regular expressions
-        // defined in the configuration
-        configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString); }) : [ ];
-        tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp); }); });
+        // drops all tweets whose user's screen name (@something) or text
+        // match any of the "drop" regular expressions defined in the
+        // configuration
+        configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString, "i"); }) : [ ];
+        tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp) || t.user.screen_name.match(regExp); }); });
         // removes duplicate ids
         tweets = _.uniq(tweets, function (s) { return s.id_str; });
         // removes duplicate content, and keeps the oldest identical tweet

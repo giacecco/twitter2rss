@@ -36,8 +36,9 @@ Any number of lists or searches, including none, can be specified. The script
 will read all configuration files located in
 _$HOME/.config/twitter2rss/feeds_.
 
-The "drops" are regular expressions that specify which of the fetched tweets to
-delete straight away, e.g. because their body contains an unwanted hashtag.
+The "drops" are regular expressions applied to the tweets' text and user screen name 
+that specify which of the fetched tweets to delete straight away, e.g. to filter out
+unwanted hashtag.
 
 The generated output feeds are then rendered into
 _$HOME/.local/twitter2rss/feeds_, using the same name as the
