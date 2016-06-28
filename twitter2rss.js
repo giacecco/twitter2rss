@@ -69,7 +69,7 @@ const init = function (callback) {
     ], callback);
 }
 
-const main = function (callback) {
+const main = function () {
 
     const readFeedConfigurations = function (callback) {
 
@@ -308,7 +308,7 @@ const main = function (callback) {
     const cycle = function (callback) {
         readFeedConfigurations(function (err, configurations) {
             if (err) return callback(err);
-            async.each(configurations, function (configuration, callback) {
+            async.eachSeries(configurations, function (configuration, callback) {
                 fetchTweets(configuration, function (err, tweets) {
                     if (err) return callback(err);
                     cleanUpTweets(configuration, tweets, function (err, tweets) {
@@ -330,7 +330,8 @@ const main = function (callback) {
         function (callback) {
             var startTimestamp = (new Date()).valueOf();
             isOnline(function (err, online) {
-                const waitAndNextCycle = function () { setTimeout(callback, argv.once ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf())); }
+                const waitAndNextCycle = function () {
+                    setTimeout(callback, argv.once ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf())); }
                 if (!err && online) { cycle(waitAndNextCycle) } else { waitAndNextCycle(); }
             });
         },
