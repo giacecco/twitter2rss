@@ -9,10 +9,13 @@ const async = require("async"),
       path = require("path"),
       // https://github.com/desmondmorris/node-twitter
       Twitter = require("twitter"),
+      // https://github.com/winstonjs/winston
+      winston = require("winston"),
       _ = require("underscore"),
       argv = require('yargs')
           .usage("Usage: $0 \
               [--debug path_to_feed_configuration_file] \
+              [--loglevel] \
               [--once] \
               [--refresh refresh_rate_in_minutes] \
               [--retweets] \
@@ -20,16 +23,11 @@ const async = require("async"),
               [--language iso_639_1_code...] \
               [--limiter perc_of_max_rate] \
           ")
+          .default("loglevel", "error")
           .default("refresh", "15")
           .default("limiter", "90")
           .default("language", [ "en" ])
           .argv;
-
-// argv.refresh is the minimum time in milliseconds between two full refreshes
-// of all feeds; note only one refresh takes place at any one time
-argv.refresh = parseFloat(argv.refresh) * 60000;
-argv.limiter = Math.min(1.0, parseFloat(argv.limiter) / 100.0);
-if (argv.debug) argv.once = true;
 
 const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                              // by language.
@@ -46,27 +44,86 @@ const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
       // From ?
       URL_REGEX = new RegExp("(http|ftp|https)://[\w-]+(\.[\w-]*)+([\w.,@?^=%&amp;:/~+#-]*[\w@?^=%&amp;/~+#-])?");
 
-const CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2rss"),
-      DATA_PATH = path.join(process.env.HOME, ".local", "twitter2rss");
-
-var twitterClient;
-
-// Check the Twitter API rate limiting at https://dev.twitter.com/rest/public/rate-limiting)
-const twitterSearchLimiter = new Limiter(Math.floor(180 * argv.limiter), 15 * 60000),
-      twitterListLimiter = new Limiter(Math.floor(15  * argv.limiter), 15 * 60000);
+// the global variables... too many?S
+var CONFIG_PATH,
+    DATA_PATH,
+    configuration,
+    logger,
+    twitterClient,
+    twitterSearchLimiter,
+    twitterListLimiter;
 
 const init = function (callback) {
+
     async.series([
-        function (callback) { fs.mkdirs(path.join(CONFIG_PATH, "feeds"), callback); },
-        function (callback) { fs.mkdirs(path.join(DATA_PATH, "feeds"), callback); },
+
+        // logger initialisation
+        function (callback) {
+            logger = new winston.Logger({
+                "level": _.contains([ "error", "warn", "info", "verbose", "debug", "silly" ], argv.loglevel.toLowerCase()) ? argv.loglevel.toLowerCase() : "error",
+                "transports": [
+                    new (winston.transports.Console)()
+                ]
+            });
+            logger.info("Initialisation starting...");
+            callback(null);
+        },
+
+        // various operational parameters Initialisation
+        function (callback) {
+
+            // argv.refresh is the minimum time in milliseconds between two full refreshes
+            // of all feeds; note only one refresh takes place at any one time
+            argv.refresh = parseFloat(argv.refresh) * 60000;
+
+            // Check the Twitter API rate limiting at https://dev.twitter.com/rest/public/rate-limiting)
+            argv.limiter = Math.min(1.0, parseFloat(argv.limiter) / 100.0);
+            twitterSearchLimiter = new Limiter(Math.floor(180 * argv.limiter), 15 * 60000);
+            twitterListLimiter = new Limiter(Math.floor(15  * argv.limiter), 15 * 60000);
+
+            // if debug mode is enabled, the cycle will run only once
+            if (argv.debug) argv.once = true;
+
+            callback(null);
+        },
+
+        // config folder
+        function (callback) {
+            CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2rss");
+            fs.mkdirs(path.join(CONFIG_PATH, "feeds"), callback);
+        },
+
+        // data folder
+        function (callback) {
+            DATA_PATH = path.join(process.env.HOME, ".local", "twitter2rss");
+            fs.mkdirs(path.join(DATA_PATH, "feeds"), callback);
+        },
+
+        // read general configuration file
         function (callback) {
             fs.readFile(path.join(CONFIG_PATH, 'config'), { 'encoding': 'utf8' }, function (err, text) {
                 if (err) return callback(err);
-                twitterClient = new Twitter(JSON.parse(text).twitter);
+                // TODO: we may be a bit more cautious in trusting the
+                // configuration JSON file here...
+                configuration = JSON.parse(text);
                 callback(null);
             });
+        },
+
+        // Twitter client initialisation
+        function (callback) {
+            twitterClient = new Twitter(configuration.twitter);
+            callback(null);
+        },
+
+    ], function (err) {
+        if (err) {
+            logger.error("Initialisation failed: " + err.message);
+            return process.exit(1);
         }
-    ], callback);
+        logger.info("Initialisation completed.");
+        callback(null);
+    });
 }
 
 const main = function () {
@@ -340,10 +397,4 @@ const main = function () {
     );
 }
 
-init(function (err) {
-    if (err) {
-        console.log("Initialisation failed.");
-        return process.exit(1);
-    }
-    main();
-});
+init(main);
