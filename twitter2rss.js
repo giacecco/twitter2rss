@@ -59,12 +59,22 @@ const init = function (callback) {
 
         // logger initialisation
         function (callback) {
+
+            const dateToCSVDate = function (d) {
+                return d.getFullYear() + "-" +
+                    ("0" + (d.getMonth() + 1)).slice(-2) + "-" +
+                    ("0" + d.getDate()).slice(-2) + " " +
+                    ("0" + d.getHours()).slice(-2) + ":" +
+                    ("0" + d.getMinutes()).slice(-2) + ":" +
+                    ("0" + d.getSeconds()).slice(-2);
+            }
+
             logger = new winston.Logger({
                 "level": _.contains([ "error", "warn", "info", "verbose", "debug", "silly" ], argv.loglevel.toLowerCase()) ? argv.loglevel.toLowerCase() : "error",
                 "transports": [
                     new (winston.transports.Console)({
                         timestamp: function() {
-                            return Date.now();
+                            return dateToCSVDate(new Date());
                         },
                         formatter: function (options) {
                             return options.timestamp() +' '+ options.level.toUpperCase() +' '+ (undefined !== options.message ? options.message : '') + (options.meta && Object.keys(options.meta).length ? '\n\t'+ JSON.stringify(options.meta) : '' );
