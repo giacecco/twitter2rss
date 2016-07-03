@@ -62,7 +62,14 @@ const init = function (callback) {
             logger = new winston.Logger({
                 "level": _.contains([ "error", "warn", "info", "verbose", "debug", "silly" ], argv.loglevel.toLowerCase()) ? argv.loglevel.toLowerCase() : "error",
                 "transports": [
-                    new (winston.transports.Console)()
+                    new (winston.transports.Console)({
+                        timestamp: function() {
+                            return Date.now();
+                        },
+                        formatter: function (options) {
+                            return options.timestamp() +' '+ options.level.toUpperCase() +' '+ (undefined !== options.message ? options.message : '') + (options.meta && Object.keys(options.meta).length ? '\n\t'+ JSON.stringify(options.meta) : '' );
+                        }
+                    })
                 ]
             });
             logger.info("Initialisation starting...");
@@ -131,6 +138,7 @@ const main = function () {
     const readFeedConfigurations = function (callback) {
 
         const getConfigurationFiles = function (callback) {
+            logger.info("Getting the names of all configuration files...");
             var configurationFiles;
             if (argv.debug) {
                 configurationFiles = [ argv.debug ];
@@ -150,17 +158,23 @@ const main = function () {
             }
         }
 
+        logger.info("Reading all configuration files...");
         getConfigurationFiles(function (err, entries) {
             if (err) return callback(err);
-            if (entries.length === 0) callback(new Error("No configuration files found."));
+            if (entries.length === 0) {
+                logger.error("No configuration files found.");
+                return callback(new Error("No configuration files found."));
+            }
             var configurations = { };
             async.each(entries, function (entry, callback) {
+                logger.info("Reading configuration file " + entry + "...");
                 fs.readFile(entry, { 'encoding': 'utf8' }, function (err, text) {
                     if (err) return callback(err);
                     configurations[path.basename(entry, ".json")] = _.extend({ "name": path.basename(entry, ".json") }, JSON.parse(text));
                     callback(null);
                 });
             }, function (err) {
+                logger.info("All configuration files read.");
                 callback(err, configurations);
             });
         });
@@ -169,13 +183,17 @@ const main = function () {
     // Note this function is memoised to cache its results for 10 minutes
     const getAllLists = async.memoize(function (callback) {
         twitterListLimiter.removeTokens(1, function() {
+            logger.info("Querying Twitter API for metadata about all lists...");
             twitterClient.get(
                 "lists/list.json",
                 // TODO: isn't the line below in the wrong place?
                 { "include_rts": argv.retweets ? "true" : undefined },
                 function (err, lists, response) {
-                    if (err) return response;
-                    if (err) return callback(err);
+                    if (err) {
+                        logger.error("Failed querying Twitter API for metadata about all lists, with error message: " + err.message);
+                        return system.exit(1);
+                    }
+                    logger.info("Querying Twitter API for metadata about all lists completed.");
                     callback(null, lists);
                 });
         });
@@ -208,18 +226,22 @@ const main = function () {
                 if (list.length < 1) return callback (new Error("List \"" + listName[0] + "\" could not be found.\""));
                 list = list[0];
                 twitterListLimiter.removeTokens(1, function() {
+                    logger.info("Querying Twitter API for statuses in list \"" + list.name + "\"...");
                     twitterClient.get(
                         "lists/statuses.json",
                         { "list_id": list.id_str,
                           "count": MAX_LIST_COUNT },
                           function (err, results, response) {
-                              if (err) return response;
-                              callback(err, err ? null :
-                                  results
-                                      .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
-                                      .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
-                                      .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); })
-                              );
+                              if (err) {
+                                  logger.error("Querying Twitter API for statuses in list \"" + list.name + "\" failed with error message: " + err.message);
+                                  return process.exit(1);
+                              }
+                              results = results
+                                  .filter(function (s) { return argv.retweets ||   !s.text.match(/^RT @(\w){1,15}/) })
+                                  .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
+                                  .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+                              logger.info("Querying Twitter API for statuses in list \"" + list.name + "\" completed.");
+                              callback(null,  results);
                           });
                 });
             });
@@ -234,6 +256,7 @@ const main = function () {
             });
         } else {
             twitterSearchLimiter.removeTokens(1, function () {
+                logger.info("Querying Twitter API for search \"" + searches[0] + "\"...");
                 twitterClient.get(
                     "search/tweets.json",
                     { "q": searches[0],
@@ -243,13 +266,16 @@ const main = function () {
                       "result_type": "recent",
                       "count": MAX_SEARCH_COUNT },
                     function (err, results, response) {
-                        if (err) return response;
-                        callback(err, err ? null :
-                            results.statuses
-                                .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
-                                .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
-                                .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); })
-                        );
+                        if (err) {
+                            logger.error("Querying Twitter API for search \"" + searches[0] + "\" failed with error message: " + err.message + ".");
+                            return process.exit(1);
+                        }
+                        results = results.statuses
+                            .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
+                            .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
+                            .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); })
+                        logger.info("Querying Twitter API for search \"" + searches[0] + "\" completed.");
+                        callback(err, results);
                     });
             });
         }
@@ -363,21 +389,31 @@ const main = function () {
     }
 
     const cycle = function (callback) {
+        logger.info("Starting a new cycle...");
         readFeedConfigurations(function (err, configurations) {
             if (err) return callback(err);
             async.eachSeries(configurations, function (configuration, callback) {
+                logger.info("Processing configuration \"" + configuration.name + "\"...");
                 fetchTweets(configuration, function (err, tweets) {
                     if (err) return callback(err);
                     cleanUpTweets(configuration, tweets, function (err, tweets) {
                         if (err) return callback(err);
-                        makeFeed(configuration, tweets, callback);
+                        makeFeed(configuration, tweets, function (err) {
+                            if (err) {
+                                logger.error("Processing of configuration \"" + configuration.name + "\" has failed with error: " + err.message + ".");
+                                return callback(err);
+                            }
+                            logger.info("Configuration \"" + configuration.name + "\" processed.");
+                            callback(null);
+                        });
                     });
                 });
             }, function (err) {
                 if (err) {
-                    console.log("Cycle interrupted by error \"" + err.message + "\".");
+                    logger.error("Cycle interrupted by error in processing one ore more configurations.");
                     return process.exit(1);
                 }
+                logger.info("The cycle is complete.");
                 callback(null);
             });
         });
@@ -388,8 +424,16 @@ const main = function () {
             var startTimestamp = (new Date()).valueOf();
             isOnline(function (err, online) {
                 const waitAndNextCycle = function () {
-                    setTimeout(callback, argv.once ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf())); }
-                if (!err && online) { cycle(waitAndNextCycle) } else { waitAndNextCycle(); }
+                    const WAITING_TIME = argv.once ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf());
+                    logger.info("Waiting " + WAITING_TIME + " ms before attempting next cycle.");
+                    setTimeout(callback, WAITING_TIME);
+                }
+                if (err || !online) {
+                    logger.info("The network is down or the component checking for connectivity returned an error.")
+                    waitAndNextCycle();
+                } else {
+                    cycle(waitAndNextCycle)
+                }
             });
         },
         function () { return !argv.once; },
