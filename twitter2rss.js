@@ -293,8 +293,8 @@ const main = function () {
 
     const fetchTweets = function (configuration, callback) {
         async.map([
-            { "options": [ ].concat(configuration.lists), "function": getStatusesByListNames },
-            { "options": [ ].concat(configuration.searches), "function": getStatusesBySearch },
+            { "options": configuration.lists ? [ ].concat(configuration.lists) : [ ], "function": getStatusesByListNames },
+            { "options": configuration.searches ? [ ].concat(configuration.searches) : [ ], "function": getStatusesBySearch },
         ], function (config, callback) {
             async.map(config.options, config.function, function (err, results) {
                 callback(err, err ? [ ] : _.flatten(results, true));
