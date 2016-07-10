@@ -15,6 +15,8 @@ const async = require("async"),
       argv = require('yargs')
           .usage("Usage: $0 \
               [--debug path_to_feed_configuration_file] \
+              [--readdump path_to_source_JSON_file] \
+              [--writedump path_to_destination_JSON_file] \
               [--loglevel] \
               [--once] \
               [--refresh refresh_rate_in_minutes] \
@@ -23,6 +25,8 @@ const async = require("async"),
               [--language iso_639_1_code...] \
               [--limiter perc_of_max_rate] \
           ")
+          // if --writedump or --readdump are defined, --debug must be, too
+          .check(function (argv) { return argv.writedump || argv.readdump ? !!argv.debug : true; })
           .default("loglevel", "error")
           .default("refresh", "15")
           .default("limiter", "90")
@@ -151,8 +155,7 @@ const main = function () {
             logger.info("Getting the names of all configuration files...");
             var configurationFiles;
             if (argv.debug) {
-                configurationFiles = [ argv.debug ];
-                return callback(null, configurationFiles);
+                return callback(null, [ argv.debug ]);
             } else {
                 fs.readdir(path.join(CONFIG_PATH, "feeds"), function (err, entries) {
                     async.filter(entries, function (entry, callback) {
@@ -429,33 +432,47 @@ const main = function () {
     }
 
     const cycle = function (callback) {
+
+        const processFetchedTweets = function (configuration, tweets, callback) {
+            if (argv.writedump) fs.writeFileSync(argv.writedump, JSON.stringify(tweets), { "encoding": "utf8" });
+            cleanUpTweets(configuration, tweets, function (err, tweets) {
+                if (err) return callback(err);
+                makeFeed(configuration, tweets, function (err) {
+                    if (err) {
+                        logger.error("Processing of configuration \"" + configuration.name + "\" has failed with error: " + err.message + ".");
+                        return callback(err);
+                    }
+                    logger.info("Configuration \"" + configuration.name + "\" processed.");
+                    callback(null);
+                });
+            });
+        }
+
+        const closeCycle = function (err) {
+            if (err) {
+                logger.error("Cycle interrupted by error in processing one ore more configurations.");
+                return process.exit(1);
+            }
+            logger.info("The cycle is complete.");
+            callback(null);
+        }
+
         logger.info("Starting a new cycle...");
         readFeedConfigurations(function (err, configurations) {
             if (err) return callback(err);
-            async.eachSeries(configurations, function (configuration, callback) {
-                logger.info("Processing configuration \"" + configuration.name + "\"...");
-                fetchTweets(configuration, function (err, tweets) {
-                    if (err) return callback(err);
-                    cleanUpTweets(configuration, tweets, function (err, tweets) {
+            if (!argv.readdump) {
+                async.eachSeries(configurations, function (configuration, callback) {
+                    logger.info("Processing configuration \"" + configuration.name + "\"...");
+                    fetchTweets(configuration, function (err, tweets) {
                         if (err) return callback(err);
-                        makeFeed(configuration, tweets, function (err) {
-                            if (err) {
-                                logger.error("Processing of configuration \"" + configuration.name + "\" has failed with error: " + err.message + ".");
-                                return callback(err);
-                            }
-                            logger.info("Configuration \"" + configuration.name + "\" processed.");
-                            callback(null);
-                        });
+                        processFetchedTweets(configuration, tweets, callback);
                     });
-                });
-            }, function (err) {
-                if (err) {
-                    logger.error("Cycle interrupted by error in processing one ore more configurations.");
-                    return process.exit(1);
-                }
-                logger.info("The cycle is complete.");
-                callback(null);
-            });
+                }, closeCycle);
+            } else {
+                logger.info("Reading tweets from dump file \"" + argv.readdump + "\"...");
+                var tweets = JSON.parse(fs.readFileSync(argv.readdump, { "encoding": "utf8" }));
+                processFetchedTweets(configurations[_.first(_.keys(configurations))], tweets, closeCycle);
+            }
         });
     }
 
