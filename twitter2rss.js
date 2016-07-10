@@ -9,10 +9,13 @@ const async = require("async"),
       path = require("path"),
       // https://github.com/desmondmorris/node-twitter
       Twitter = require("twitter"),
+      // https://github.com/winstonjs/winston
+      winston = require("winston"),
       _ = require("underscore"),
       argv = require('yargs')
           .usage("Usage: $0 \
               [--debug path_to_feed_configuration_file] \
+              [--loglevel] \
               [--once] \
               [--refresh refresh_rate_in_minutes] \
               [--retweets] \
@@ -20,16 +23,11 @@ const async = require("async"),
               [--language iso_639_1_code...] \
               [--limiter perc_of_max_rate] \
           ")
+          .default("loglevel", "error")
           .default("refresh", "15")
           .default("limiter", "90")
           .default("language", [ "en" ])
           .argv;
-
-// argv.refresh is the minimum time in milliseconds between two full refreshes
-// of all feeds; note only one refresh takes place at any one time
-argv.refresh = parseFloat(argv.refresh) * 60000;
-argv.limiter = Math.min(1.0, parseFloat(argv.limiter) / 100.0);
-if (argv.debug) argv.once = true;
 
 const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                              // by language.
@@ -46,27 +44,103 @@ const MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
       // From ?
       URL_REGEX = new RegExp("(http|ftp|https)://[\w-]+(\.[\w-]*)+([\w.,@?^=%&amp;:/~+#-]*[\w@?^=%&amp;/~+#-])?");
 
-const CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2rss"),
-      DATA_PATH = path.join(process.env.HOME, ".local", "twitter2rss");
-
-var twitterClient;
-
-// Check the Twitter API rate limiting at https://dev.twitter.com/rest/public/rate-limiting)
-const twitterSearchLimiter = new Limiter(Math.floor(180 * argv.limiter), 15 * 60000),
-      twitterListLimiter = new Limiter(Math.floor(15  * argv.limiter), 15 * 60000);
+// the global variables... too many?S
+var CONFIG_PATH,
+    DATA_PATH,
+    configuration,
+    logger,
+    twitterClient,
+    twitterSearchLimiter,
+    twitterListLimiter;
 
 const init = function (callback) {
+
     async.series([
-        function (callback) { fs.mkdirs(path.join(CONFIG_PATH, "feeds"), callback); },
-        function (callback) { fs.mkdirs(path.join(DATA_PATH, "feeds"), callback); },
+
+        // logger initialisation
+        function (callback) {
+
+            const dateToCSVDate = function (d) {
+                return d.getFullYear() + "-" +
+                    ("0" + (d.getMonth() + 1)).slice(-2) + "-" +
+                    ("0" + d.getDate()).slice(-2) + " " +
+                    ("0" + d.getHours()).slice(-2) + ":" +
+                    ("0" + d.getMinutes()).slice(-2) + ":" +
+                    ("0" + d.getSeconds()).slice(-2);
+            }
+
+            logger = new winston.Logger({
+                "level": _.contains([ "error", "warn", "info", "verbose", "debug", "silly" ], argv.loglevel.toLowerCase()) ? argv.loglevel.toLowerCase() : "error",
+                "transports": [
+                    new (winston.transports.Console)({
+                        timestamp: function() {
+                            return dateToCSVDate(new Date());
+                        },
+                        formatter: function (options) {
+                            return options.timestamp() +' '+ options.level.toUpperCase() +' '+ (undefined !== options.message ? options.message : '') + (options.meta && Object.keys(options.meta).length ? '\n\t'+ JSON.stringify(options.meta) : '' );
+                        }
+                    })
+                ]
+            });
+            logger.info("Initialisation starting...");
+            callback(null);
+        },
+
+        // various operational parameters Initialisation
+        function (callback) {
+
+            // argv.refresh is the minimum time in milliseconds between two full refreshes
+            // of all feeds; note only one refresh takes place at any one time
+            argv.refresh = parseFloat(argv.refresh) * 60000;
+
+            // Check the Twitter API rate limiting at https://dev.twitter.com/rest/public/rate-limiting)
+            argv.limiter = Math.min(1.0, parseFloat(argv.limiter) / 100.0);
+            twitterSearchLimiter = new Limiter(Math.floor(180 * argv.limiter), 15 * 60000);
+            twitterListLimiter = new Limiter(Math.floor(15  * argv.limiter), 15 * 60000);
+
+            // if debug mode is enabled, the cycle will run only once
+            if (argv.debug) argv.once = true;
+
+            callback(null);
+        },
+
+        // config folder
+        function (callback) {
+            CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2rss");
+            fs.mkdirs(path.join(CONFIG_PATH, "feeds"), callback);
+        },
+
+        // data folder
+        function (callback) {
+            DATA_PATH = path.join(process.env.HOME, ".local", "twitter2rss");
+            fs.mkdirs(path.join(DATA_PATH, "feeds"), callback);
+        },
+
+        // read general configuration file
         function (callback) {
             fs.readFile(path.join(CONFIG_PATH, 'config'), { 'encoding': 'utf8' }, function (err, text) {
                 if (err) return callback(err);
-                twitterClient = new Twitter(JSON.parse(text).twitter);
+                // TODO: we may be a bit more cautious in trusting the
+                // configuration JSON file here...
+                configuration = JSON.parse(text);
                 callback(null);
             });
+        },
+
+        // Twitter client initialisation
+        function (callback) {
+            twitterClient = new Twitter(configuration.twitter);
+            callback(null);
+        },
+
+    ], function (err) {
+        if (err) {
+            logger.error("Initialisation failed: " + err.message);
+            return process.exit(1);
         }
-    ], callback);
+        logger.info("Initialisation completed.");
+        callback(null);
+    });
 }
 
 const main = function () {
@@ -74,6 +148,7 @@ const main = function () {
     const readFeedConfigurations = function (callback) {
 
         const getConfigurationFiles = function (callback) {
+            logger.info("Getting the names of all configuration files...");
             var configurationFiles;
             if (argv.debug) {
                 configurationFiles = [ argv.debug ];
@@ -93,17 +168,23 @@ const main = function () {
             }
         }
 
+        logger.info("Reading all configuration files...");
         getConfigurationFiles(function (err, entries) {
             if (err) return callback(err);
-            if (entries.length === 0) callback(new Error("No configuration files found."));
+            if (entries.length === 0) {
+                logger.error("No configuration files found.");
+                return callback(new Error("No configuration files found."));
+            }
             var configurations = { };
             async.each(entries, function (entry, callback) {
+                logger.info("Reading configuration file " + entry + "...");
                 fs.readFile(entry, { 'encoding': 'utf8' }, function (err, text) {
                     if (err) return callback(err);
                     configurations[path.basename(entry, ".json")] = _.extend({ "name": path.basename(entry, ".json") }, JSON.parse(text));
                     callback(null);
                 });
             }, function (err) {
+                logger.info("All configuration files read.");
                 callback(err, configurations);
             });
         });
@@ -112,13 +193,17 @@ const main = function () {
     // Note this function is memoised to cache its results for 10 minutes
     const getAllLists = async.memoize(function (callback) {
         twitterListLimiter.removeTokens(1, function() {
+            logger.info("Querying Twitter API for metadata about all lists...");
             twitterClient.get(
                 "lists/list.json",
                 // TODO: isn't the line below in the wrong place?
                 { "include_rts": argv.retweets ? "true" : undefined },
                 function (err, lists, response) {
-                    if (err) return response;
-                    if (err) return callback(err);
+                    if (err) {
+                        logger.error("Failed querying Twitter API for metadata about all lists, with error message: " + err.message);
+                        return system.exit(1);
+                    }
+                    logger.info("Querying Twitter API for metadata about all lists completed.");
                     callback(null, lists);
                 });
         });
@@ -151,18 +236,22 @@ const main = function () {
                 if (list.length < 1) return callback (new Error("List \"" + listName[0] + "\" could not be found.\""));
                 list = list[0];
                 twitterListLimiter.removeTokens(1, function() {
+                    logger.info("Querying Twitter API for statuses in list \"" + list.name + "\"...");
                     twitterClient.get(
                         "lists/statuses.json",
                         { "list_id": list.id_str,
                           "count": MAX_LIST_COUNT },
                           function (err, results, response) {
-                              if (err) return response;
-                              callback(err, err ? null :
-                                  results
-                                      .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
-                                      .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
-                                      .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); })
-                              );
+                              if (err) {
+                                  logger.error("Querying Twitter API for statuses in list \"" + list.name + "\" failed with error message: " + err.message);
+                                  return process.exit(1);
+                              }
+                              results = results
+                                  .filter(function (s) { return argv.retweets ||   !s.text.match(/^RT @(\w){1,15}/) })
+                                  .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
+                                  .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); });
+                              logger.info("Querying Twitter API for statuses in list \"" + list.name + "\" completed.");
+                              callback(null,  results);
                           });
                 });
             });
@@ -177,6 +266,7 @@ const main = function () {
             });
         } else {
             twitterSearchLimiter.removeTokens(1, function () {
+                logger.info("Querying Twitter API for search \"" + searches[0] + "\"...");
                 twitterClient.get(
                     "search/tweets.json",
                     { "q": searches[0],
@@ -186,13 +276,16 @@ const main = function () {
                       "result_type": "recent",
                       "count": MAX_SEARCH_COUNT },
                     function (err, results, response) {
-                        if (err) return response;
-                        callback(err, err ? null :
-                            results.statuses
-                                .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
-                                .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
-                                .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); })
-                        );
+                        if (err) {
+                            logger.error("Querying Twitter API for search \"" + searches[0] + "\" failed with error message: " + err.message + ".");
+                            return process.exit(1);
+                        }
+                        results = results.statuses
+                            .filter(function (s) { return argv.retweets || !s.text.match(/^RT @(\w){1,15}/) })
+                            .filter(function (s) { return argv.replies || !s.text.match(/^@(\w){1,15} /) })
+                            .filter(function (s) { return _.contains([ ].concat(argv.language), s.lang); })
+                        logger.info("Querying Twitter API for search \"" + searches[0] + "\" completed.");
+                        callback(err, results);
                     });
             });
         }
@@ -200,8 +293,8 @@ const main = function () {
 
     const fetchTweets = function (configuration, callback) {
         async.map([
-            { "options": [ ].concat(configuration.lists), "function": getStatusesByListNames },
-            { "options": [ ].concat(configuration.searches), "function": getStatusesBySearch },
+            { "options": configuration.lists ? [ ].concat(configuration.lists) : [ ], "function": getStatusesByListNames },
+            { "options": configuration.searches ? [ ].concat(configuration.searches) : [ ], "function": getStatusesBySearch },
         ], function (config, callback) {
             async.map(config.options, config.function, function (err, results) {
                 callback(err, err ? [ ] : _.flatten(results, true));
@@ -213,22 +306,68 @@ const main = function () {
 
     const cleanUpTweets = function (configuration, tweets, callback) {
 
-        const bucketTweetsByTime = function (tweets, lapse) {
-            tweets.sort(function (a, b) { return a.created_at - b.created_at; });
-            var results = [ ];
-            tweets.forEach(function (e) {
-                var grouped = false;
-                for (var i = 0; !grouped && (i < results.length); i++) {
-                    if (_.some(results[i], function (f) {
-                        return Math.abs(e.created_at - f.created_at) <= lapse;
-                    })) {
-                        grouped = true;
-                        results[i] = results[i].concat(e);
-                    }
-                }
-                if (!grouped) results = results.concat([[ e ]]);
+        // This function returns an array of arrays of tweets, grouped by the
+        // user's screen name.
+        const splitTweetsByScreenname = function (_tweets) {
+            var tweets = JSON.parse(JSON.stringify(_tweets)),
+                results = _.uniq(_.pluck(_.pluck(tweets, "user"), "screen_name")).map(function (screenName) {
+                return tweets.filter(function (t) { return t.user.screen_name === screenName; });
             });
-            return results;
+            return(results);
+        }
+
+        // This function returns an array of arrays of tweets, grouped in
+        // "buckets" made of consecutive tweets whose timestamp is within
+        // _lapse_ milliseconds of each other.
+        const bucketTweetsByTime = function (_tweets, lapse) {
+            var tweets = JSON.parse(JSON.stringify(_tweets)),
+                tweet = null,
+                results = [ ],
+                currentGroup = [ ];
+            tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
+            // sort in reverse chronological order, to use pop below
+            tweets.sort(function (a, b) { return b.created_at - a.created_at; });
+            while(tweet = tweets.pop()) {
+                if ((currentGroup.length === 0) || (tweet.created_at - _.last(currentGroup).created_at <= lapse)) {
+                    // this is the earliest tweet, or the tweet is within lapse
+                    // from the previous, it falls in the same group
+                    currentGroup.push(tweet);
+                } else {
+                    // the tweet is not within lapse from the previous; the
+                    // previous group is complete, and another is started
+                    results.push(currentGroup);
+                    currentGroup = [ tweet ];
+                }
+            }
+            results.push(currentGroup);
+            return(results);
+        }
+
+        // This function aggregates an array of tweets into one tweet, built
+        // by concatenating all tweets' text into the first tweet's.
+        const aggregateTweets = function (tweets) {
+            // just return the original tweet if there isn't more than 1!
+            if (tweets.length < 2) return tweets[0];
+            // ... otherwise do the actual aggregation
+            var newTweet = tweets[0];
+            for (var i = 1; i < tweets.length; i++)
+                newTweet.text += (
+                    "<br>" +
+                    ("0" + tweets[i].created_at.getHours()).slice(-2) +
+                    ":" +
+                    ("0" + tweets[i].created_at.getMinutes()).slice(-2) +
+                    " - " +
+                    tweets[i].text
+                );
+            return newTweet;
+        }
+
+        // This function gets an array of tweets and replaces bursts of tweets
+        // by the same user with a single tweet.
+        const consolidateTweetBursts = function (tweets, lapse) {
+            return(_.flatten(splitTweetsByScreenname(tweets).map(function (userTweets) {
+                return(bucketTweetsByTime(userTweets, lapse).map(aggregateTweets));
+            }), true));
         }
 
         // drops all tweets whose user's screen name (@something) or text
@@ -237,33 +376,17 @@ const main = function () {
         configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString, "i"); }) : [ ];
         tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp) || t.user.screen_name.match(regExp); }); });
         // removes duplicate ids
-        tweets = _.uniq(tweets, function (s) { return s.id_str; });
+        tweets = _.uniq(tweets, false, function (s) { return s.id_str; });
         // removes duplicate content, and keeps the oldest identical tweet
         // TODO: is this really useful?
         tweets = _.uniq(_.pluck(tweets, "text").map(function (t) { return t.replace(URL_REGEX, ""); }))
             .map(function (text) {
                 return _.first(tweets.filter(function (tweet) { return tweet.text.replace(URL_REGEX, "") === text; }).sort(function (a, b) { return a.created_at - b.created_at; }));
             });
+        // aggregate user "bursts"
+        tweets = consolidateTweetBursts(tweets);
         // makes the dates into Date objects
         tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
-        // aggregate user "bursts"
-        tweets = _.flatten(_.uniq(_.pluck(_.pluck(tweets, "user"), "screen_name")).map(function (screenName) {
-            return tweets.filter(function (t) { return t.user.screen_name === screenName; });
-        }).map(function (userTweets) {
-            return bucketTweetsByTime(userTweets, TWEET_BURST).map(function (tweetsGroup) {
-                var newTweet = tweetsGroup[0];
-                for (var i = 1; i < tweetsGroup.length; i++)
-                    newTweet.text += (
-                        "<br>" +
-                        ("0" + tweetsGroup[i].created_at.getHours()).slice(-2) +
-                        ":" +
-                        ("0" + tweetsGroup[i].created_at.getMinutes()).slice(-2) +
-                        " - " +
-                        tweetsGroup[i].text
-                    );
-                return newTweet;
-            });
-        }), true);
         callback(null, tweets);
     }
 
@@ -306,21 +429,31 @@ const main = function () {
     }
 
     const cycle = function (callback) {
+        logger.info("Starting a new cycle...");
         readFeedConfigurations(function (err, configurations) {
             if (err) return callback(err);
             async.eachSeries(configurations, function (configuration, callback) {
+                logger.info("Processing configuration \"" + configuration.name + "\"...");
                 fetchTweets(configuration, function (err, tweets) {
                     if (err) return callback(err);
                     cleanUpTweets(configuration, tweets, function (err, tweets) {
                         if (err) return callback(err);
-                        makeFeed(configuration, tweets, callback);
+                        makeFeed(configuration, tweets, function (err) {
+                            if (err) {
+                                logger.error("Processing of configuration \"" + configuration.name + "\" has failed with error: " + err.message + ".");
+                                return callback(err);
+                            }
+                            logger.info("Configuration \"" + configuration.name + "\" processed.");
+                            callback(null);
+                        });
                     });
                 });
             }, function (err) {
                 if (err) {
-                    console.log("Cycle interrupted by error \"" + err.message + "\".");
+                    logger.error("Cycle interrupted by error in processing one ore more configurations.");
                     return process.exit(1);
                 }
+                logger.info("The cycle is complete.");
                 callback(null);
             });
         });
@@ -331,8 +464,16 @@ const main = function () {
             var startTimestamp = (new Date()).valueOf();
             isOnline(function (err, online) {
                 const waitAndNextCycle = function () {
-                    setTimeout(callback, argv.once ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf())); }
-                if (!err && online) { cycle(waitAndNextCycle) } else { waitAndNextCycle(); }
+                    const WAITING_TIME = argv.once ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf());
+                    logger.info("Waiting " + WAITING_TIME + " ms before attempting next cycle.");
+                    setTimeout(callback, WAITING_TIME);
+                }
+                if (err || !online) {
+                    logger.info("The network is down or the component checking for connectivity returned an error.")
+                    waitAndNextCycle();
+                } else {
+                    cycle(waitAndNextCycle)
+                }
             });
         },
         function () { return !argv.once; },
@@ -340,10 +481,4 @@ const main = function () {
     );
 }
 
-init(function (err) {
-    if (err) {
-        console.log("Initialisation failed.");
-        return process.exit(1);
-    }
-    main();
-});
+init(main);
