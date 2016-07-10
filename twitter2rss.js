@@ -7,6 +7,8 @@ const async = require("async"),
       // https://github.com/jhurliman/node-rate-limiter
       Limiter = require('limiter').RateLimiter,
       path = require("path"),
+      // https://github.com/mapbox/node-sqlite3
+      sqlite3 = require('sqlite3').verbose(),
       // https://github.com/desmondmorris/node-twitter
       Twitter = require("twitter"),
       // https://github.com/winstonjs/winston
@@ -295,6 +297,47 @@ const main = function () {
     }, function (searches) { return JSON.stringify(searches) + "_" + Math.floor((new Date()).valueOf() / (argv.refresh * 60000)); });
 
     const fetchTweets = function (configuration, callback) {
+
+        // this function adds any new tweets to the archive
+        const saveTweets = function (configuration, tweets, callback) {
+
+            const createOrOpenDb = function (callback) {
+                fs.stat(sqliteFilename, function (err, stat) {
+                    var newDb = !!err;
+                    var db = new sqlite3.Database(sqliteFilename, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, function (err) {
+                        if (err) {
+                            logger.error("Error opening the sqlite3 cache for configuration " + configuration.name + ". Error message is: " + err.message);
+                            return process.exit(1);
+                        }
+                        if (!newDb) return callback(null, db);
+                        db.run("CREATE TABLE tweets (id TEXT, payload TEXT, UNIQUE(id));", { }, function (err) {
+                            if (err) {
+                                logger.error("Error initialising the sqlite3 cache for configuration " + configuration.name + ". Error message is: " + err.message);
+                                return process.exit(1);
+                            }
+                            logger.info("Initialised the sqlite3 cache for configuration " + configuration.name + ".");
+                            callback(null, db);
+                        });
+                    });
+                });
+            }
+
+            var sqliteFilename = path.join(DATA_PATH, "feeds", configuration.name + ".sqlite3");
+            createOrOpenDb(function (err, db) {
+                async.eachSeries(tweets, function (tweet, callback) {
+                    db.run("INSERT OR IGNORE INTO tweets (id, payload) VALUES ('" + tweet.id_str + "', '" + _.escape(JSON.stringify(tweet)) + "');", callback);
+                }, function (err) {
+                    if (err) {
+                        logger.error("Error inserting tweet into cache: " + err.message);
+                        return process.exit(1);
+                    }
+                    db.close(function (err) {
+                        callback(err, tweets);
+                    });
+                });
+            });
+        }
+
         async.map([
             { "options": configuration.lists ? [ ].concat(configuration.lists) : [ ], "function": getStatusesByListNames },
             { "options": configuration.searches ? [ ].concat(configuration.searches) : [ ], "function": getStatusesBySearch },
@@ -303,7 +346,12 @@ const main = function () {
                 callback(err, err ? [ ] : _.flatten(results, true));
             });
         }, function (err, results) {
-            callback(err, err ? [ ] : _.flatten(results, true));
+            if (err) return callback(err, [ ]);
+            results = _.flatten(results, true);
+            // removes duplicate ids (e.g. the same tweet could come out in a
+            // list and a search)
+            results = _.uniq(results, false, function (s) { return s.id_str; });
+            saveTweets(configuration, results, callback);
         });
     }
 
@@ -378,8 +426,6 @@ const main = function () {
         // configuration
         configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString, "i"); }) : [ ];
         tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp) || t.user.screen_name.match(regExp); }); });
-        // removes duplicate ids
-        tweets = _.uniq(tweets, false, function (s) { return s.id_str; });
         // removes duplicate content, and keeps the oldest identical tweet
         // TODO: is this really useful?
         tweets = _.uniq(_.pluck(tweets, "text").map(function (t) { return t.replace(URL_REGEX, ""); }))
