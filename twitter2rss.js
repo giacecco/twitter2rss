@@ -306,22 +306,68 @@ const main = function () {
 
     const cleanUpTweets = function (configuration, tweets, callback) {
 
-        const bucketTweetsByTime = function (tweets, lapse) {
-            tweets.sort(function (a, b) { return a.created_at - b.created_at; });
-            var results = [ ];
-            tweets.forEach(function (e) {
-                var grouped = false;
-                for (var i = 0; !grouped && (i < results.length); i++) {
-                    if (_.some(results[i], function (f) {
-                        return Math.abs(e.created_at - f.created_at) <= lapse;
-                    })) {
-                        grouped = true;
-                        results[i] = results[i].concat(e);
-                    }
-                }
-                if (!grouped) results = results.concat([[ e ]]);
+        // This function returns an array of arrays of tweets, grouped by the
+        // user's screen name.
+        const splitTweetsByScreenname = function (_tweets) {
+            var tweets = JSON.parse(JSON.stringify(_tweets)),
+                results = _.uniq(_.pluck(_.pluck(tweets, "user"), "screen_name")).map(function (screenName) {
+                return tweets.filter(function (t) { return t.user.screen_name === screenName; });
             });
-            return results;
+            return(results);
+        }
+
+        // This function returns an array of arrays of tweets, grouped in
+        // "buckets" made of consecutive tweets whose timestamp is within
+        // _lapse_ milliseconds of each other.
+        const bucketTweetsByTime = function (_tweets, lapse) {
+            var tweets = JSON.parse(JSON.stringify(_tweets)),
+                tweet = null,
+                results = [ ],
+                currentGroup = [ ];
+            tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
+            // sort in reverse chronological order, to use pop below
+            tweets.sort(function (a, b) { return b.created_at - a.created_at; });
+            while(tweet = tweets.pop()) {
+                if ((currentGroup.length === 0) || (tweet.created_at - _.last(currentGroup).created_at <= lapse)) {
+                    // this is the earliest tweet, or the tweet is within lapse
+                    // from the previous, it falls in the same group
+                    currentGroup.push(tweet);
+                } else {
+                    // the tweet is not within lapse from the previous; the
+                    // previous group is complete, and another is started
+                    results.push(currentGroup);
+                    currentGroup = [ tweet ];
+                }
+            }
+            results.push(currentGroup);
+            return(results);
+        }
+
+        // This function aggregates an array of tweets into one tweet, built
+        // by concatenating all tweets' text into the first tweet's.
+        const aggregateTweets = function (tweets) {
+            // just return the original tweet if there isn't more than 1!
+            if (tweets.length < 2) return tweets[0];
+            // ... otherwise do the actual aggregation
+            var newTweet = tweets[0];
+            for (var i = 1; i < tweets.length; i++)
+                newTweet.text += (
+                    "<br>" +
+                    ("0" + tweets[i].created_at.getHours()).slice(-2) +
+                    ":" +
+                    ("0" + tweets[i].created_at.getMinutes()).slice(-2) +
+                    " - " +
+                    tweets[i].text
+                );
+            return newTweet;
+        }
+
+        // This function gets an array of tweets and replaces bursts of tweets
+        // by the same user with a single tweet.
+        const consolidateTweetBursts = function (tweets, lapse) {
+            return(_.flatten(splitTweetsByScreenname(tweets).map(function (userTweets) {
+                return(bucketTweetsByTime(userTweets, lapse).map(aggregateTweets));
+            }), true));
         }
 
         // drops all tweets whose user's screen name (@something) or text
@@ -330,33 +376,17 @@ const main = function () {
         configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString, "i"); }) : [ ];
         tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp) || t.user.screen_name.match(regExp); }); });
         // removes duplicate ids
-        tweets = _.uniq(tweets, function (s) { return s.id_str; });
+        tweets = _.uniq(tweets, false, function (s) { return s.id_str; });
         // removes duplicate content, and keeps the oldest identical tweet
         // TODO: is this really useful?
         tweets = _.uniq(_.pluck(tweets, "text").map(function (t) { return t.replace(URL_REGEX, ""); }))
             .map(function (text) {
                 return _.first(tweets.filter(function (tweet) { return tweet.text.replace(URL_REGEX, "") === text; }).sort(function (a, b) { return a.created_at - b.created_at; }));
             });
+        // aggregate user "bursts"
+        tweets = consolidateTweetBursts(tweets);
         // makes the dates into Date objects
         tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
-        // aggregate user "bursts"
-        tweets = _.flatten(_.uniq(_.pluck(_.pluck(tweets, "user"), "screen_name")).map(function (screenName) {
-            return tweets.filter(function (t) { return t.user.screen_name === screenName; });
-        }).map(function (userTweets) {
-            return bucketTweetsByTime(userTweets, TWEET_BURST).map(function (tweetsGroup) {
-                var newTweet = tweetsGroup[0];
-                for (var i = 1; i < tweetsGroup.length; i++)
-                    newTweet.text += (
-                        "<br>" +
-                        ("0" + tweetsGroup[i].created_at.getHours()).slice(-2) +
-                        ":" +
-                        ("0" + tweetsGroup[i].created_at.getMinutes()).slice(-2) +
-                        " - " +
-                        tweetsGroup[i].text
-                    );
-                return newTweet;
-            });
-        }), true);
         callback(null, tweets);
     }
 
