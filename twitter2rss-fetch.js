@@ -30,7 +30,7 @@ const async = require("async"),
 
 const t2rShared = new require("./twitter2rss-shared")();
 
-const MAX_CACHE_AGE = 30, // the max number of days tweets should be kept
+const MAX_CACHE_AGE = 365, // the default max number of days tweets are kept
       MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                              // by language.
                              // NOTE: I haven't checked if there is a limit to
