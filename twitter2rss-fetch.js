@@ -205,7 +205,7 @@ const main = function () {
                             return process.exit(1);
                         }
                         if (!newDb) return callback(null, db);
-                        db.run("CREATE TABLE tweets (id TEXT, payload TEXT, UNIQUE(id));", { }, function (err) {
+                        db.run("CREATE TABLE tweets (id TEXT, payload JSON, UNIQUE(id));", { }, function (err) {
                             if (err) {
                                 t2rShared.getLogger().error("Error initialising the sqlite3 cache for configuration " + configuration.name + ". Error message is: " + err.message);
                                 return process.exit(1);
@@ -220,7 +220,10 @@ const main = function () {
             var sqliteFilename = path.join(t2rShared.getDataPath(), "feeds", configuration.name + ".sqlite3");
             createOrOpenDb(function (err, db) {
                 async.eachSeries(tweets, function (tweet, callback) {
-                    db.run("INSERT OR IGNORE INTO tweets (id, payload) VALUES ('" + tweet.id_str + "', '" + _.escape(JSON.stringify(tweet)) + "');", callback);
+                    db.run("INSERT OR IGNORE INTO tweets (id, payload) VALUES ($id, json($payload));", {
+                        "$id": tweet.id,
+                        "$payload": JSON.stringify(tweet)
+                    }, callback);
                 }, function (err) {
                     if (err) {
                         t2rShared.getLogger().error("Error inserting tweet into cache: " + err.message);

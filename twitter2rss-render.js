@@ -49,7 +49,7 @@ const main = function () {
                 }
                 db.all("SELECT * FROM tweets;", function (err, results) {
                     if (err) return callback(null, [ ]);
-                    callback(null, results.map(function (row) { return JSON.parse(_.unescape(row.payload)); }));
+                    callback(null, results.map(function (row) { return JSON.parse(row.payload); }));
                 });
             });
         });
