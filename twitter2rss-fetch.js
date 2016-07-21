@@ -30,7 +30,7 @@ const async = require("async"),
 
 const t2rShared = new require("./twitter2rss-shared")();
 
-const MAX_CACHE_AGE = 100, // the max number of days tweets should be kept
+const MAX_CACHE_AGE = 30, // the max number of days tweets should be kept
       MAX_LIST_COUNT = 1000, // No. of max tweets to fetch, before filtering
                              // by language.
                              // NOTE: I haven't checked if there is a limit to
@@ -231,7 +231,7 @@ const main = function () {
                         return process.exit(1);
                     }
                     // garbage collect
-                    db.run("delete from tweets where date('now') - datetime(substr(json_extract(payload, '$.created_at'), 27, 4) || '-' || case substr(json_extract(payload, '$.created_at'), 5, 3) when 'Jan' then '01' when 'Feb' then '02' when 'Mar' then '03' when 'Apr' then '04' when 'May' then '05' when 'Jun' then '06' when 'Jul' then '07' when 'Aug' then '08' when 'Sep' then '09' when 'Oct' then '10' when 'Nov' then '11' when 'Dec' then '12' end || '-' || substr(json_extract(payload, '$.created_at'), 9, 2) || ' ' || substr(json_extract(payload, '$.created_at'), 12, 2) || ':' || substr(json_extract(payload, '$.created_at'), 15, 2) || ':' || substr(json_extract(payload, '$.created_at'), 18, 2)) > $maxCacheAge;", { "$maxCacheAge": MAX_CACHE_AGE }, function (err) {
+                    db.run("delete from tweets where date('now') - datetime(substr(json_extract(payload, '$.created_at'), 27, 4) || '-' || case substr(json_extract(payload, '$.created_at'), 5, 3) when 'Jan' then '01' when 'Feb' then '02' when 'Mar' then '03' when 'Apr' then '04' when 'May' then '05' when 'Jun' then '06' when 'Jul' then '07' when 'Aug' then '08' when 'Sep' then '09' when 'Oct' then '10' when 'Nov' then '11' when 'Dec' then '12' end || '-' || substr(json_extract(payload, '$.created_at'), 9, 2) || ' ' || substr(json_extract(payload, '$.created_at'), 12, 2) || ':' || substr(json_extract(payload, '$.created_at'), 15, 2) || ':' || substr(json_extract(payload, '$.created_at'), 18, 2)) > $maxCacheAge;", { "$maxCacheAge": configuration.archive ? parseInt(configuration.archive.max_age || MAX_CACHE_AGE) : MAX_CACHE_AGE }, function (err) {
                         if (err) {
                             t2rShared.getLogger().error("Error garbage-collecting the cache: " + err.message);
                             return process.exit(1);
