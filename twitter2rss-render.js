@@ -121,22 +121,24 @@ const main = function () {
             }), true));
         }
 
+        // makes the dates into Date objects
+        tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
+        callback(null, tweets);
+
+        // identifies tweets whose text is identical but by URLs they include
+        // (because different shorteners may change them while referring to the
+        // same source), and keeps the oldest only
+        tweets = Array.from(new Set(_.pluck(tweets, "text").map(text => text.replace(URL_REGEX, "")))).map(text => _.first(tweets.filter(tweet => tweet.text.replace(URL_REGEX, "") === text).sort((a, b) => a - b)));
+
         // drops all tweets whose user's screen name (@something) or text
         // match any of the "drop" regular expressions defined in the
         // configuration
         configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString, "i"); }) : [ ];
         tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp) || t.user.screen_name.match(regExp); }); });
-        // removes duplicate content, and keeps the oldest identical tweet
-        // TODO: is this really useful?
-        tweets = _.uniq(_.pluck(tweets, "text").map(function (t) { return t.replace(URL_REGEX, ""); }))
-            .map(function (text) {
-                return _.first(tweets.filter(function (tweet) { return tweet.text.replace(URL_REGEX, "") === text; }).sort(function (a, b) { return a.created_at - b.created_at; }));
-            });
+
         // aggregate user "bursts"
         tweets = consolidateTweetBursts(tweets);
-        // makes the dates into Date objects
-        tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
-        callback(null, tweets);
+
     }
 
     const makeFeed = function (configuration, tweets, callback) {
