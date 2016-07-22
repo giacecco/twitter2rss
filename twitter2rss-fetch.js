@@ -279,26 +279,24 @@ const main = function () {
         });
     }
 
+    var startTimestamp = null;
     async.doWhilst(
-        function (callback) {
-            var startTimestamp = (new Date()).valueOf();
-            isOnline(function (err, online) {
-                const waitAndNextCycle = function () {
-                    const WAITING_TIME = argv.once ? 0 : Math.max(0, startTimestamp + argv.refresh - (new Date()).valueOf());
-                    t2rShared.getLogger().info("Waiting " + WAITING_TIME + " ms before attempting next cycle.");
-                    setTimeout(callback, WAITING_TIME);
-                }
+        callback => {
+            const now = (new Date()).valueOf();
+            if (startTimestamp && (now - startTimestamp < argv.refresh)) return setTimeout(callback, 1000);
+            startTimestamp = now;
+            isOnline((err, online) => {
                 if (err || !online) {
                     t2rShared.getLogger().info("The network is down or the component checking for connectivity returned an error.")
-                    waitAndNextCycle();
-                } else {
-                    cycle(waitAndNextCycle)
+                    return callback(null);
                 }
+                return cycle(callback)
             });
         },
-        function () { return !argv.once; },
-        function () { } // this is never run unless argv.once
+        () => !argv.once,
+        () => { }
     );
+
 }
 
 init(main);
