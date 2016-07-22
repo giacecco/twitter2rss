@@ -121,9 +121,17 @@ const main = function () {
             }), true));
         }
 
+        // NOTE: the order of the cleaning operations is intentional!
+        
         // makes the dates into Date objects
         tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
         callback(null, tweets);
+
+        // drops all tweets whose user's screen name (@something) or text
+        // match any of the "drop" regular expressions defined in the
+        // configuration
+        configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString, "i"); }) : [ ];
+        tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp) || t.user.screen_name.match(regExp); }); });
 
         // identifies tweets whose text is identical but by the hashtags and
         // URLs they include, and keeps the oldest only
@@ -135,12 +143,6 @@ const main = function () {
             memo[cleaned] = !memo[cleaned] ? t : (memo[cleaned].created_at < t.created_at ? memo[cleaned] : t);
             return memo;
         }, { }));
-
-        // drops all tweets whose user's screen name (@something) or text
-        // match any of the "drop" regular expressions defined in the
-        // configuration
-        configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString, "i"); }) : [ ];
-        tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp) || t.user.screen_name.match(regExp); }); });
 
         // aggregate user "bursts"
         tweets = consolidateTweetBursts(tweets);
