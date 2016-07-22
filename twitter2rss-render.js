@@ -125,10 +125,16 @@ const main = function () {
         tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
         callback(null, tweets);
 
-        // identifies tweets whose text is identical but by URLs they include
-        // (because different shorteners may change them while referring to the
-        // same source), and keeps the oldest only
-        tweets = Array.from(new Set(_.pluck(tweets, "text").map(text => text.replace(URL_REGEX, "")))).map(text => _.first(tweets.filter(tweet => tweet.text.replace(URL_REGEX, "") === text).sort((a, b) => a - b)));
+        // identifies tweets whose text is identical but by the hashtags and
+        // URLs they include, and keeps the oldest only
+        tweets = _.values(tweets.reduce((memo, t) => {
+            const cleaned = t.text
+                .replace(URL_REGEX, "")
+                .replace(/#[\w-]+/g, "")
+                .replace(/\s\s+/, " "); // see http://stackoverflow.com/a/1981366
+            memo[cleaned] = !memo[cleaned] ? t : (memo[cleaned].created_at < t.created_at ? memo[cleaned] : t);
+            return memo;
+        }, { }));
 
         // drops all tweets whose user's screen name (@something) or text
         // match any of the "drop" regular expressions defined in the
