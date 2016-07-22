@@ -14,8 +14,9 @@ const t2rShared = new require("./twitter2rss-shared")();
 const // A Twitter burst is defined by two tweets being published at most this
       // close (milliseconds)
       TWEET_BURST = 180000,
-      // From ?
-      URL_REGEX = new RegExp("(http|ftp|https)://[\w-]+(\.[\w-]*)+([\w.,@?^=%&amp;:/~+#-]*[\w@?^=%&amp;/~+#-])?");
+      // From http://stackoverflow.com/a/3809435 + change to support 1-character
+      // second level domains.
+      URL_REGEX = new RegExp(/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]{2,4}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi);
 
 const init = function (callback) {
 
@@ -122,7 +123,7 @@ const main = function () {
         }
 
         // NOTE: the order of the cleaning operations is intentional!
-        
+
         // makes the dates into Date objects
         tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
         callback(null, tweets);
