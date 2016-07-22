@@ -122,11 +122,56 @@ const main = function () {
             }), true));
         }
 
+        // This function splits the input tweets in groups made of tweets whose
+        // text is sufficiently similar, then returns the earliest tweet from
+        // each group.
+        // Similarity between two strings is calculated as the proportion
+        // between their Levenstein distance and the length of the longest
+        // tweet.
+        // Similarity is sufficient when the aforementioned "score" is not
+        // higher than _tolerance_.
+        const consolidateAlmostDuplicates = (_tweets, tolerance) => {
+
+            // From https://gist.github.com/andrei-m/982927#gistcomment-1797205
+            const levenstein = (a, b) => {
+                var m = [], i, j, min = Math.min;
+                if (!(a && b)) return (b || a).length;
+                for (i = 0; i <= b.length; m[i] = [i++]);
+                for (j = 0; j <= a.length; m[0][j] = j++);
+                for (i = 1; i <= b.length; i++) {
+                    for (j = 1; j <= a.length; j++) {
+                        m[i][j] = b.charAt(i - 1) == a.charAt(j - 1)
+                            ? m[i - 1][j - 1]
+                            : m[i][j] = min(
+                                m[i - 1][j - 1] + 1,
+                                min(m[i][j - 1] + 1, m[i - 1 ][j] + 1))
+                    }
+                }
+                return m[b.length][a.length];
+            }
+
+            tweets = JSON.parse(JSON.stringify(_tweets));
+            tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
+            // SOMETHING HERE!
+            // There must be an algorithm to do this properly, see
+            // http://stats.stackexchange.com/questions/2717/clustering-with-a-distance-matrix
+            // and https://en.wikipedia.org/wiki/UPGMA
+            var distances = new Array(tweets.length, tweets.length);
+            for (var x = 0; x < tweets.length - 1; x++)
+                for (var y = x + 1; y < tweets.length; y++) {
+                    const score = levenstein(tweets[x].text, tweets[y].text) / Math.max(tweets[x].text.length, tweets[y].text.length);
+                    distances[x][y] = score;
+                    distances[y][x] = score;
+                }
+
+
+            return tweets;
+        }
+
         // NOTE: the order of the cleaning operations is intentional!
 
         // makes the dates into Date objects
         tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
-        callback(null, tweets);
 
         // drops all tweets whose user's screen name (@something) or text
         // match any of the "drop" regular expressions defined in the
@@ -145,8 +190,12 @@ const main = function () {
             return memo;
         }, { }));
 
+        // tweets = consolidateAlmostDuplicates(tweets, .5);
+
         // aggregate user "bursts"
         tweets = consolidateTweetBursts(tweets);
+
+        callback(null, tweets);
 
     }
 
