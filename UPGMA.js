@@ -4,7 +4,7 @@
 // described at https://en.wikipedia.org/wiki/UPGMA
 const UPGMA = (params) => {
 
-    // some checks on the input parameters
+    // a few checks on the input parameters
     try {
         if (
                 // 'labels' and 'distances' are defined
@@ -46,7 +46,7 @@ const UPGMA = (params) => {
     newLabels.splice(Math.max(minimum.x, minimum.y), 1);
     newLabels.splice(Math.min(minimum.x, minimum.y), 1);
     // prepend the aggregated labels
-    newLabels = [ ].concat([ labels[minimum.x].concat(labels[minimum.y]).sort() ], newLabels);
+    newLabels = [ ].concat([[ labels[minimum.x].concat(labels[minimum.y]).sort() ]], newLabels);
     // remove the aggregated elements from the distances
     newDistances.splice(Math.max(minimum.x, minimum.y), 1);
     newDistances.splice(Math.min(minimum.x, minimum.y), 1);
@@ -67,6 +67,8 @@ const UPGMA = (params) => {
     oldIndeces.splice(Math.min(minimum.x, minimum.y), 1);
 
     // calculates the new distances
+    // TODO: need to better study the original algorithm: below it is not clear
+    //       if the weight takes hierarchy in consideration
     for(let row = 1; row < newDistances.length; row++) {
         newDistances[row][0] = (
             labels[minimum.x].length * distances[minimum.x][oldIndeces[row - 1]] +
@@ -78,6 +80,7 @@ const UPGMA = (params) => {
     return({ "labels": newLabels, "distances": newDistances });
 }
 
+/*
 let round1 = UPGMA({
     "labels": [ "a", "b", "c", "d", "e" ],
     "distances": [
@@ -90,4 +93,6 @@ let round1 = UPGMA({
 });
 let round2 = UPGMA(round1);
 let round3 = UPGMA(round2);
-console.log(round3);
+console.log(JSON.stringify(round3));
+// round3 should be {"labels":[[["c","d"]],[[["a","b"],"e"]]],"distances":[[0,35],[35,0]]}
+*/
