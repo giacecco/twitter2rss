@@ -14,7 +14,13 @@ const UPGMA = (params) => {
                 params.labels.length !== params.distances.length ||
                 !params.distances.every(row => row.length === params.labels.length) ||
                 // the dimensions are numeric
-                !params.distances.every(row => row.every(value => !isNaN(parseFloat(value)) && isFinite(value)))
+                !params.distances.every(row => row.every(value => !isNaN(parseFloat(value)) && isFinite(value))) ||
+                // the dimensions are simmetric
+                (() => { let ok = true;
+                         for(let x = 0; (x < params.distances.length) && ok; x++)
+                             for(let y = 0; (y < params.distances.length) && ok; y ++)
+                                 ok = (params.distances[x][y] === params.distances[y][x]);
+                       })()
             ) throw new Error();
     } catch(e) {
         throw new Error("The input parameters to the UPGMA algorithm are inconsistent or invalid.");
