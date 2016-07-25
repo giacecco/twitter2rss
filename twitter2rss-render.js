@@ -1,3 +1,5 @@
+"use strict";
+
 const async = require("async"),
       Feed = require('feed'),
       fs = require("fs-extra"),
@@ -122,6 +124,21 @@ const main = function () {
             }), true));
         }
 
+        // identifies tweets whose text is identical but by the hashtags and
+        // URLs they include, and keeps the oldest only
+        const consolidateDuplicates = _tweets => {
+            let tweets = JSON.parse(JSON.stringify(_tweets));
+            tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
+            return _.values(tweets.reduce((memo, t) => {
+                t.cleaned = t.text
+                    .replace(URL_REGEX, "")
+                    .replace(/#[\w-]+/g, "")
+                    .replace(/\s\s+/, " "); // see http://stackoverflow.com/a/1981366
+                memo[t.cleaned] = !memo[t.cleaned] ? t : (memo[t.cleaned].created_at < t.created_at ? memo[t.cleaned] : t);
+                return memo;
+            }, { }));
+        }
+
         // This function splits the input tweets in groups made of tweets whose
         // text is sufficiently similar, then returns the earliest tweet from
         // each group.
@@ -150,22 +167,124 @@ const main = function () {
                 return m[b.length][a.length];
             }
 
-            tweets = JSON.parse(JSON.stringify(_tweets));
-            tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
-            // SOMETHING HERE!
-            // There must be an algorithm to do this properly, see
-            // http://stats.stackexchange.com/questions/2717/clustering-with-a-distance-matrix
-            // and https://en.wikipedia.org/wiki/UPGMA
-            var distances = new Array(tweets.length, tweets.length);
-            for (var x = 0; x < tweets.length - 1; x++)
-                for (var y = x + 1; y < tweets.length; y++) {
-                    const score = levenstein(tweets[x].text, tweets[y].text) / Math.max(tweets[x].text.length, tweets[y].text.length);
-                    distances[x][y] = score;
-                    distances[y][x] = score;
+            const UPGMA = (params) => {
+
+                // a few checks on the input parameters
+                try {
+                    if (
+                            // 'labels' and 'distances' are defined
+                            !params.labels ||
+                            !params.distances ||
+                            // the dimensions are consistent
+                            params.labels.length !== params.distances.length ||
+                            !params.distances.every(row => row.length === params.labels.length) ||
+                            // the dimensions are numeric
+                            !params.distances.every(row => row.every(value => !isNaN(parseFloat(value)) && isFinite(value))) ||
+                            // the dimensions are simmetric
+                            (() => { let ok = true;
+                                     for(let x = 0; (x < params.distances.length) && ok; x++)
+                                         for(let y = 0; (y < params.distances.length) && ok; y ++)
+                                             ok = (params.distances[x][y] === params.distances[y][x]);
+                                   })()
+                        ) throw new Error();
+                } catch(e) {
+                    throw new Error("The input parameters to the UPGMA algorithm are inconsistent or invalid.");
                 }
 
+                let labels = JSON.parse(JSON.stringify(params.labels)),
+                    distances = JSON.parse(JSON.stringify(params.distances));
 
-            return tweets;
+                // makes the labels into arrays, if they aren't already
+                labels = labels.map(label => [ ].concat(label));
+
+                // find the minimum and its location
+                let minimum = null;
+                for (let row = 1; row < distances.length; row++)
+                    for (let column = 0; column < row; column++)
+                        if (!minimum || distances[minimum.x][minimum.y] > distances[row][column]) minimum = { "x": row, "y": column }
+
+                // prepares the matrix for the next iteration, so that the aggregated
+                // labels are in the first position
+                let newLabels = JSON.parse(JSON.stringify(labels)),
+                    newDistances = JSON.parse(JSON.stringify(distances));
+                // remove the aggregated elements from the labels
+                newLabels.splice(Math.max(minimum.x, minimum.y), 1);
+                newLabels.splice(Math.min(minimum.x, minimum.y), 1);
+                // prepend the aggregated labels
+                newLabels = [ ].concat([[ labels[minimum.x].concat(labels[minimum.y]).sort() ]], newLabels);
+                // remove the aggregated elements from the distances
+                newDistances.splice(Math.max(minimum.x, minimum.y), 1);
+                newDistances.splice(Math.min(minimum.x, minimum.y), 1);
+                newDistances = newDistances.map(row => {
+                    row.splice(Math.max(minimum.x, minimum.y), 1);
+                    row.splice(Math.min(minimum.x, minimum.y), 1);
+                    return row;
+                });
+                // add to the distances an empty leftmost column
+                newDistances = newDistances.map(row => [ 0 ].concat(row));
+                // add a empty top row, too
+                newDistances = [ (new Array(newDistances[0].length)).fill(0) ].concat(newDistances);
+
+                // creates a quick reference table to the positions in the old distances
+                let oldIndeces = [ ];
+                for(let i = 0; i < distances[0].length; i++) oldIndeces[i] = i;
+                oldIndeces.splice(Math.max(minimum.x, minimum.y), 1);
+                oldIndeces.splice(Math.min(minimum.x, minimum.y), 1);
+
+                // calculates the new distances
+                // TODO: need to better study the original algorithm: below it is not clear
+                //       if the weight takes hierarchy in consideration
+                for(let row = 1; row < newDistances.length; row++) {
+                    newDistances[row][0] = (
+                        labels[minimum.x].length * distances[minimum.x][oldIndeces[row - 1]] +
+                        labels[minimum.y].length * distances[minimum.y][oldIndeces[row - 1]]
+                    ) / (labels[minimum.x].length + labels[minimum.y].length);
+                    newDistances[0][row] = newDistances[row][0];
+                }
+
+                return({ "labels": newLabels, "distances": newDistances });
+            }
+
+            // clones the input
+            tweets = JSON.parse(JSON.stringify(_tweets));
+            tweets.forEach(function (s) { s.created_at = new Date(s.created_at); });
+
+            // first clean-up: just drop the exact copies and keep the oldest;
+            // the new tweets set also has a "cleaned" property with the text
+            // cleaned up of URLs and hashtags
+            tweets = consolidateDuplicates(tweets);
+
+            // second clean-up: drop similar tweets
+
+            let labels,
+                distances = (new Array(tweets.length)).fill(0).map(row => new Array(tweets.length).fill(0)),
+                min_distance = null;
+
+            // calculates the original distances matrix
+            labels = tweets.map(t => t.id_str);
+            for (let x = 1; x < distances.length; x++)
+                for (let y = 0; y < x; y++) {
+                    distances[x][y] = levenstein(tweets[x].cleaned, tweets[y].cleaned) / Math.max(tweets[x].cleaned.length, tweets[y].cleaned.length);
+                    distances[y][x] = distances[x][y];
+                    if (!min_distance || distances[x][y] < min_distance) min_distance = distances[x][y];
+                }
+
+            while(min_distance <= tolerance) {
+                let results = UPGMA({
+                    "labels": labels,
+                    "distances": distances
+                });
+                labels = results.labels;
+                distances = results.distances;
+                // re-calculate the minimum distance after aggregation
+                min_distance = null;
+                for (let x = 1; x < distances.length; x++)
+                    for (let y = 0; y < x; y++)
+                        if (!min_distance || distances[x][y] < min_distance) min_distance = distances[x][y];
+            }
+
+            // returns the oldest tweet for each group
+            return labels.map(l => [ ].concat(_.flatten(l))).map(l => tweets.filter(t => _.contains(l, t.id_str)).sort((a, b) => a.created_at - b.created_at)[0])
         }
 
         // NOTE: the order of the cleaning operations is intentional!
@@ -179,18 +298,7 @@ const main = function () {
         configuration.drops = configuration.drops ? [ ].concat(configuration.drops).map(function (regexpString) { return new RegExp(regexpString, "i"); }) : [ ];
         tweets = tweets.filter(function (t) { return !_.any(configuration.drops, function (regExp) { return t.text.match(regExp) || t.user.screen_name.match(regExp); }); });
 
-        // identifies tweets whose text is identical but by the hashtags and
-        // URLs they include, and keeps the oldest only
-        tweets = _.values(tweets.reduce((memo, t) => {
-            const cleaned = t.text
-                .replace(URL_REGEX, "")
-                .replace(/#[\w-]+/g, "")
-                .replace(/\s\s+/, " "); // see http://stackoverflow.com/a/1981366
-            memo[cleaned] = !memo[cleaned] ? t : (memo[cleaned].created_at < t.created_at ? memo[cleaned] : t);
-            return memo;
-        }, { }));
-
-        // tweets = consolidateAlmostDuplicates(tweets, .5);
+        tweets = consolidateDuplicates(tweets);
 
         // aggregate user "bursts"
         tweets = consolidateTweetBursts(tweets);
