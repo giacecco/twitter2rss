@@ -178,7 +178,9 @@ const main = function () {
                       "count": MAX_SEARCH_COUNT },
                     function (err, results, response) {
                         if (err) {
-                            t2rShared.getLogger().error("Querying Twitter API for search \"" + searches[0] + "\" failed with error message: " + err.message + ".");
+                            // TODO: need to avoid quitting for errors such as
+                            //       503 (service unavailable) https://dev.twitter.com/overview/api/response-codes
+                            t2rShared.getLogger().error("Querying Twitter API for search \"" + searches[0] + "\" failed with error message: " + err.message + ", full response is " + JSON.stringify(response) + ".");
                             return process.exit(1);
                         }
                         results = results.statuses

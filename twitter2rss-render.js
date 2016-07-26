@@ -15,7 +15,7 @@ const t2rShared = new require("./twitter2rss-shared")();
 
 const // A Twitter burst is defined by two tweets being published at most this
       // close (milliseconds)
-      TWEET_BURST = 180000,
+      TWEET_BURST = 300000,
       // From http://stackoverflow.com/a/3809435 + change to support 1-character
       // second level domains.
       URL_REGEX = new RegExp(/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]{2,4}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi);
