@@ -49,13 +49,13 @@ module.exports = function () {
             // config folder
             function (callback) {
                 CONFIG_PATH = path.join(process.env.HOME, ".config", "twitter2rss");
-                fs.mkdirs(path.join(CONFIG_PATH, "feeds"), callback);
+                fs.ensureDir(path.join(CONFIG_PATH, "feeds"), callback);
             },
 
             // data folder
             function (callback) {
                 DATA_PATH = path.join(process.env.HOME, ".local", "twitter2rss");
-                fs.mkdirs(path.join(DATA_PATH, "feeds"), callback);
+                fs.ensureDir(path.join(DATA_PATH, "feeds"), callback);
             },
 
             // read general configuration file
