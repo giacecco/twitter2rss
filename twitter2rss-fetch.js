@@ -1,8 +1,5 @@
 const async = require("async"),
       fs = require("fs-extra"),
-      // https://github.com/sindresorhus/is-online
-      // overkill?
-      isOnline = require('is-online'),
       // https://github.com/jhurliman/node-rate-limiter
       Limiter = require('limiter').RateLimiter,
       path = require("path"),
@@ -287,8 +284,9 @@ const main = function () {
             const now = (new Date()).valueOf();
             if (startTimestamp && (now - startTimestamp < argv.refresh)) return setTimeout(callback, 1000);
             startTimestamp = now;
-            isOnline((err, online) => {
-                if (err || !online) {
+            t2rShared.isOnline(online => {
+                console.log("Am I here 3? " + online);
+                if (!online) {
                     t2rShared.getLogger().info("The network is down or the component checking for connectivity returned an error.")
                     return callback(null);
                 }

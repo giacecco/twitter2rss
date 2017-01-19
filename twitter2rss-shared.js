@@ -1,4 +1,5 @@
 const async = require("async"),
+      dns = require('dns'),
       fs = require("fs-extra"),
       path = require("path"),
       // https://github.com/mapbox/node-sqlite3
@@ -33,12 +34,11 @@ module.exports = function () {
                     "level": _.contains([ "error", "warn", "info", "verbose", "debug", "silly" ], parameters.loglevel.toLowerCase()) ? parameters.loglevel.toLowerCase() : "error",
                     "transports": [
                         new (winston.transports.Console)({
-                            timestamp: function() {
-                                return dateToCSVDate(new Date());
-                            },
-                            formabtter: function (options) {
-                                return options.timestamp() +' '+ options.level.toUpperCase() +' '+ (undefined !== options.message ? options.message : '') + (options.meta && Object.keys(options.meta).length ? '\n\t'+ JSON.stringify(options.meta) : '' );
-                            }
+                            "timestamp": () => dateToCSVDate(new Date()),
+                            "formatter": options => options.timestamp() + ' ' + options.level.toUpperCase() + ' ' +
+                                                    (undefined !== options.message ? options.message : '') +
+                                                    (options.meta && Object.keys(options.meta).length ? '\n\t' +
+                                                     JSON.stringify(options.meta) : ''),
                         })
                     ]
                 });
@@ -131,12 +131,22 @@ module.exports = function () {
         });
     }
 
+    const isOnline = callback => {
+        // solution offered by http://stackoverflow.com/a/35015482
+        console.log("Am I here 1?");
+        dns.lookupService('8.8.8.8', 53, (err, hostname, service) => {
+            console.log("Am I here 2? " + err);
+            callback(!err);
+        });
+    }
+
     return {
         "getDataPath": function () { return DATA_PATH; },
         "getConfiguration": function () { return configuration; },
         "getFeedConfiguration": getFeedConfiguration,
         "getFeedConfigurations": getFeedConfigurations,
         "init": init,
+        "isOnline": isOnline,
         "getLogger": function () { return logger; }
     };
 }
