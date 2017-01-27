@@ -11,19 +11,20 @@ const async = require("async"),
       argv = require('yargs')
           .usage("Usage: $0 \
               [--debug path_to_feed_configuration_file] \
-              [--once] \
-              [--refresh refresh_rate_in_minutes] \
               [--retweets] \
               [--replies] \
+              [--urls] \
               [--language iso_639_1_code...] \
-              [--limiter perc_of_max_rate] \
           ")
-          .default("refresh", "15")
           .default("language", [ "en" ])
           .argv;
 
 // force argv.languages into an array
 argv.language = [ ].concat(argv.language);
+
+// From http://stackoverflow.com/a/3809435 + change to support 1-character
+// second level domains.
+const URL_REGEX = new RegExp(/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]{2,4}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi);
 
 const
   APPLICATION = {
@@ -52,14 +53,18 @@ fs.readFile(configuration, { "encoding": "utf8" }, (err, text) => {
         callback => {
             // all the searches
             async.map(configuration.searches, (searchString, callback) => {
-                twitter.getSearchTweets({
-                    "q": searchString,
-                    "lang": argv.language,
-                    "count": 100,
-                    "resultType": "recent"
-                }, (err, results) => {
-                    // TODO: manage error here
-                    callback(null, results.statuses);
+                async.map(argv.language, (lang, callback) => {
+                    twitter.getSearchTweets({
+                        "q": searchString,
+                        "lang": lang, //search/tweets allows me to specify a language
+                        "count": 100,
+                        "resultType": "recent"
+                    }, (err, results) => {
+                        // TODO: manage error here
+                        callback(null, results.statuses);
+                    });
+                }, (err, r) => {
+                    callback(err, _.flatten(r, true));
                 });
             }, (err, r) => {
                 callback(err, results = results.concat(_.flatten(r, true)));
@@ -78,7 +83,7 @@ fs.readFile(configuration, { "encoding": "utf8" }, (err, text) => {
                         // TODO: manage error here
                         // NOTE: the tweets' language cannot be specified in lists/statuses ,
                         //       hence the filtering here
-                        callback(null, results.filter(r => _.contains(argv.language, r.lang));
+                        callback(null, results);
                     });
                 }, (err, r) => {
                     callback(err, results = results.concat(_.flatten(r, true)));
@@ -86,8 +91,39 @@ fs.readFile(configuration, { "encoding": "utf8" }, (err, text) => {
             });
         }
     ], err => {
-        // delete duplicates and sort in chronological order
-        results = _.uniq(results, r => r.id_str).sort((x, y) => (new Date(x.created_at) - new Date(y.created_at)));
-        console.log(JSON.stringify(results.map(x => x.created_at)));
+
+        // delete duplicates coming from the same tweet being captured by
+        // different searches and lists, identified by tweet id
+        results = _.uniq(results, r => r.id_str);
+
+        // drop retweets, checks both the metadata and the text
+        if (argv.retweets) results = results.filter(s => !s.in_reply_to_status_id_str && !s.text.match(/^rt /i));
+
+        // drop replies, checks both the metadata and the text
+        if (argv.retweets) results = results.filter(s => !s.in_reply_to_user_id_str && !s.text.match(/^@/));
+
+        // sort in chronological order
+        results.forEach(s => s.created_at = new Date(s.created_at));
+        results = results.sort((x, y) => x.created_at - y.created_at);
+
+        // drops messages that differ just by the hashtags or URLs they
+        // reference and keep the oldest tweet only
+        if (argv.urls) {
+            results = _.uniq(results, s => s.text
+                // drop the URLs
+                .replace(URL_REGEX, "")
+                // drop the hashtags
+                .replace(/#[\w-]+/g, "")
+                // drop all dirty characters and spaces
+                .replace(/[^A-Za-z0-9]/g, "")
+            );
+        }
+
+        // final touches
+        results = results
+            // filter for the required languages
+            .filter(s => _.contains(argv.language, s.lang));
+
+        console.log(results.map(s => s.text).join("\n"));
     });
 });
