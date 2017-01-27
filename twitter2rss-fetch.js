@@ -44,18 +44,20 @@ var twitter = new T2({
   "tokensecret": argv.tokensecret ? argv.tokensecret : process.env.TWITTER2RSS_ACCESS_TOKEN_SECRET
 });
 
-let configuration = { "searches": [ ], "lists": [ ] };
+let configuration = { "searches": [ ], "lists": [ ], "drops": [ ] };
 // interprets all specified configuration files
 argv._.forEach(configurationFile => {
     if (fileExistsSync(configurationFile)) {
         let c = JSON.parse(fs.readFileSync(configurationFile, { "encoding": "utf8" }));
-        configuration.searches = _.uniq(configuration.searches.concat(c.searches));
-        configuration.lists = _.uniq(configuration.lists.concat(c.lists));
+        configuration.searches = configuration.searches.concat(c.searches);
+        configuration.lists = configuration.lists.concat(c.lists);
+        configuration.drops = configuration.drops.concat(c.drops);
     }
 });
 // adds anything specified directly on the command line
-configuration.searches = argv.search ? configuration.searches.concat(argv.search) : configuration.searches;
-configuration.lists = argv.list ? configuration.lists.concat(argv.list) : configuration.lists;
+configuration.searches = _.uniq(argv.search ? configuration.searches.concat(argv.search) : configuration.searches);
+configuration.lists = _.uniq(argv.list ? configuration.lists.concat(argv.list) : configuration.lists);
+configuration.drops = _.uniq(argv.drop ? configuration.drops.concat(argv.drop) : configuration.drops);
 // does the job
 let results = [ ];
 async.parallel([
@@ -104,6 +106,8 @@ async.parallel([
     // delete duplicates coming from the same tweet being captured by
     // different searches and lists, identified by tweet id
     results = _.uniq(results, r => r.id_str);
+
+    if (configuration.drops) results = results.filter(s => !_.any(configuration.drops, d => s.text.match(new RegExp(d))));
 
     // drop retweets, checks both the metadata and the text
     if (argv.retweets) results = results.filter(s => !s.in_reply_to_status_id_str && !s.text.match(/^rt /i));

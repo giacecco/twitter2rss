@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS tweets (id TEXT, payload JSON, UNIQUE(id));
