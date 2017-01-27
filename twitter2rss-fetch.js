@@ -1,9 +1,6 @@
 const async = require("async"),
       fs = require("fs-extra"),
       path = require("path"),
-      // https://github.com/mapbox/node-sqlite3
-      // custom open source licence
-      sqlite3 = require('sqlite3').verbose(),
       // https://github.com/Digital-Contraptions-Imaginarium/t2
       // MIT license
       T2 = require("im.dico.t2").Twitter,
