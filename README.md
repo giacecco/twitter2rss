@@ -1,8 +1,6 @@
 twitter2rss
 ===========
 
-**THIS IS THE 'ng' BRANCH, CURRENTLY UNDER DEVELOPMENT. ONLY THE ```twitter2rss-fetch.js``` SCRIPT IS RELATIVELY MATURE AT THIS STAGE.**
-
 _twitter2rss_ is a series of scripts to perform and cache complex searches on Twitter and produce JSON or other file formats, including for example Atom feeds (hence the name) to use in RSS readers such as [Newsbeuter](http://newsbeuter.org/).
 
 _twitter2rss_ is transparently throttled not to violate Twitter's rate limiting terms. The script won't terminate until calling all the required APIs is possible and completed. Throttling is implemented by the underlying Twitter API client [Digital-Contraptions-Imaginarium/t2](https://github.com/Digital-Contraptions-Imaginarium/t2).
