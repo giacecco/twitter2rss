@@ -1,7 +1,11 @@
 twitter2rss
 ===========
 
-_twitter2rss_ is a script, suitable to be run as a cron job, to perform complex searches on Twitter and produce JSON or other file formats, including Atom feeds (hence the name).
+**THIS IS THE 'ng' BRANCH, CURRENTLY UNDER DEVELOPMENT. ONLY THE ```twitter2rss-fetch.js``` SCRIPT IS RELATIVELY MATURE AT THIS STAGE.**
+
+_twitter2rss_ is a series of scripts to perform and cache complex searches on Twitter and produce JSON or other file formats, including for example Atom feeds (hence the name) to use in RSS readers such as [Newsbeuter](http://newsbeuter.org/).
+
+_twitter2rss_ is transparently throttled not to violate Twitter's rate limiting terms. The script won't terminate until calling all the required APIs is possible and completed. Throttling is implemented by the underlying Twitter API client [Digital-Contraptions-Imaginarium/t2](https://github.com/Digital-Contraptions-Imaginarium/t2).
 
 Usage is:
 
@@ -9,7 +13,7 @@ Usage is:
 $ node twitter2rss-fetch.js [configuration file] [--search search_string] [--list list_name] [--drop regexp] [--noise] [--retweets] [--replies] [--post javascript_code_or_script_file]
 ```
 
-Note that you can specify any number of configuration files, search strings, postprocessing JavaScript commands etc.
+You can specify any number of configuration files, search strings, postprocessing JavaScript commands etc.
 
 The configuration files are defined using JSON files in the format below:
 
@@ -33,7 +37,7 @@ The configuration files are defined using JSON files in the format below:
 }
 ```
 
-Searches are specified by using the same format you would use on Twitter's website, e.g. using capital letter logical operators such as in ```#datascience OR @giacecco```. When calling Twitter's ```search/tweets``` API the ```resultType``` parameter is always set to "recent" in the attempt to avoid Twitter's editorialization (read more [here](https://dev.twitter.com/rest/reference/get/search/tweets)).
+Searches are specified by using the same format you would use on Twitter's website, e.g. using capital letter logical operators such as in ```#datascience OR @dicoim```. When calling Twitter's ```search/tweets``` API the ```resultType``` parameter is always set to "recent" in the attempt to avoid Twitter's editorialization (read more [here](https://dev.twitter.com/rest/reference/get/search/tweets)).
 
 The "drops" are regular expressions applied to the tweets' text and user screen name that specify which of the fetched tweets to delete straight away, e.g. to filter out unwanted hashtag.
 
@@ -45,11 +49,13 @@ By specifying the ```--replies``` argument, all replies are dropped (statuses st
 
 By specifying the ```--noise``` argument, tweets whose content differ only by the URLs or hashtags are dropped, and the oldest tweet is kept.
 
+The ```--post``` *t2* option can be used to run one or more transformations over the tweets, before displaying, expressed as a synchronous or asynchronous JavaScript function. E.g. a very useful transformation is ```--post 'r => r.map(x => JSON.stringify(x)).join("\n")' ``` that makes one JSON array of objects - as in the results of the original ```lists/list``` API - into [JSONL](http://jsonlines.org/): one JSON object per line. ```--post``` can also reference a text file with the code you want to execute on the results.
+
 Only tweets in English are returned, unless one or more alternative ISO 639-1 codes are specified using the _--language_ command line parameter.
 
 ## Example
 
-In this example below, we search Twitter for the "trump" keyword, drop the tweets that include any word ending in "hole", and save the results in a SQLlite3 database for later reuse:
+In this example below, we search Twitter for the "trump" keyword, drop retweets, replies and any tweet containing any word ending in "hole", and save the results in a SQLlite3 database for later reuse:
 
 ```
 $ cat utils/insertIntoSqlite3.sql > temp-script.sql
