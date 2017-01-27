@@ -13,8 +13,9 @@ const async = require("async"),
               [--debug path_to_feed_configuration_file] \
               [--retweets] \
               [--replies] \
-              [--urls] \
+              [--noise] \
               [--language iso_639_1_code...] \
+              [--post] \
           ")
           .default("language", [ "en" ])
           .argv;
@@ -33,6 +34,11 @@ const
       VERSION: "0.2.0"
   },
   CONFIG_FOLDER = path.join(process.env.HOME, ".local", APPLICATION.LOCAL);
+
+const fileExistsSync = f => {
+  // TODO if the original from the *fs* library was deprecated there must be a reason...
+  var ok = true; try { fs.statSync(f); } catch (err) { ok = false; }; return ok;
+};
 
 var twitter = new T2({
   "consumerkey": argv.consumerkey ? argv.consumerkey : process.env.TWITTER2RSS_CONSUMER_KEY,
@@ -108,7 +114,7 @@ fs.readFile(configuration, { "encoding": "utf8" }, (err, text) => {
 
         // drops messages that differ just by the hashtags or URLs they
         // reference and keep the oldest tweet only
-        if (argv.urls) {
+        if (argv.noise) {
             results = _.uniq(results, s => s.text
                 // drop the URLs
                 .replace(URL_REGEX, "")
@@ -124,6 +130,25 @@ fs.readFile(configuration, { "encoding": "utf8" }, (err, text) => {
             // filter for the required languages
             .filter(s => _.contains(argv.language, s.lang));
 
-        console.log(results.map(s => s.text).join("\n"));
+        // --post directives and output
+        // NOTE: this is the same code as in t2cli.json in
+        //       Digital-Contraptions-Imaginarium/t2
+        async.reduce(!argv.post ? [ "x => JSON.stringify(x)" ] : [ ].concat(argv.post), results, (memo, p, callback) => {
+            p = eval(fileExistsSync(p) ? fs.readFileSync(p, { "encoding": "utf8" }) : p);
+            if (p.length > 1) {
+                // the --post function is asynchronous
+                return p(memo, callback);
+            } else {
+                // the --post function is synchronous
+                callback(null, p(memo));
+            }
+        }, (err, results) => {
+            if (err) {
+                console.error("Undefined error in executing the --post commands.");
+                process.exit(1);
+            }
+            console.log(results);
+        });
+
     });
 });
