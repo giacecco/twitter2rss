@@ -4,6 +4,13 @@ var Feed = require('feed'),
         .demandCommand(1)
         .argv;
 
+const
+    APPLICATION = {
+        LOCAL: "im.dico.twitter2rss",
+        NAME: "twitter2rss",
+        VERSION: "0.2.0"
+    };
+
 let data = "";
 
 process.stdin.resume();
