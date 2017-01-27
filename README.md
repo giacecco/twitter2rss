@@ -1,9 +1,15 @@
 twitter2rss
 ===========
 
-_twitter2rss_ is a script, suitable to be run as a daemon, suitable to perform complex searches on Twitter and produce JSON or other file formats, including Atom feeds (hence the name)
+_twitter2rss_ is a script, suitable to be run as a cron job, to perform complex searches on Twitter and produce JSON or other file formats, including Atom feeds (hence the name).
 
-Note that when calling Twitter's ```search/tweets``` API the ```resultType``` parameter is always set to "recent" in the attempt to avoid Twitter's editorialization (read more [here](https://dev.twitter.com/rest/reference/get/search/tweets)).
+Usage is:
+
+```
+$ node twitter2rss-fetch.js [configuration file] [--search search_string] [--list list_name] [--drop regexp] [--noise] [--retweets] [--replies] [--post javascript_code_or_script_file]
+```
+
+Note that you can specify any number of configuration files, search strings, postprocessing JavaScript commands etc.
 
 The configuration files are defined using JSON files in the format below:
 
@@ -27,7 +33,7 @@ The configuration files are defined using JSON files in the format below:
 }
 ```
 
-Searches are specified by using the same format you would use on Twitter's website, e.g. using capital letter logical operators such as in ```#datascience OR @giacecco```.
+Searches are specified by using the same format you would use on Twitter's website, e.g. using capital letter logical operators such as in ```#datascience OR @giacecco```. When calling Twitter's ```search/tweets``` API the ```resultType``` parameter is always set to "recent" in the attempt to avoid Twitter's editorialization (read more [here](https://dev.twitter.com/rest/reference/get/search/tweets)).
 
 The "drops" are regular expressions applied to the tweets' text and user screen name that specify which of the fetched tweets to delete straight away, e.g. to filter out unwanted hashtag.
 
