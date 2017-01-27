@@ -22,6 +22,17 @@ const async = require("async"),
           .default("language", [ "en" ])
           .argv;
 
+// force argv.languages into an array
+argv.language = [ ].concat(argv.language);
+
+const
+  APPLICATION = {
+      LOCAL: "im.dico.twitter2rss",
+      NAME: "twitter2rss",
+      VERSION: "0.2.0"
+  },
+  CONFIG_FOLDER = path.join(process.env.HOME, ".local", APPLICATION.LOCAL);
+
 var twitter = new T2({
   "consumerkey": argv.consumerkey ? argv.consumerkey : process.env.TWITTER2RSS_CONSUMER_KEY,
   "consumersecret": argv.consumersecret ? argv.consumersecret : process.env.TWITTER2RSS_CONSUMER_SECRET,
@@ -43,7 +54,7 @@ fs.readFile(configuration, { "encoding": "utf8" }, (err, text) => {
             async.map(configuration.searches, (searchString, callback) => {
                 twitter.getSearchTweets({
                     "q": searchString,
-                    "lang": "en",
+                    "lang": argv.language,
                     "count": 100,
                     "resultType": "recent"
                 }, (err, results) => {
@@ -65,7 +76,9 @@ fs.readFile(configuration, { "encoding": "utf8" }, (err, text) => {
                         "count": 100 // not clear if there's a max here
                     }, (err, results) => {
                         // TODO: manage error here
-                        callback(null, results);
+                        // NOTE: the tweets' language cannot be specified in lists/statuses ,
+                        //       hence the filtering here
+                        callback(null, results.filter(r => _.contains(argv.language, r.lang));
                     });
                 }, (err, r) => {
                     callback(err, results = results.concat(_.flatten(r, true)));
@@ -73,8 +86,8 @@ fs.readFile(configuration, { "encoding": "utf8" }, (err, text) => {
             });
         }
     ], err => {
-        // delete duplicates and sort in reverse chronological order
+        // delete duplicates and sort in chronological order
         results = _.uniq(results, r => r.id_str).sort((x, y) => (new Date(x.created_at) - new Date(y.created_at)));
-        console.log(JSON.stringify(results));
+        console.log(JSON.stringify(results.map(x => x.created_at)));
     });
 });
