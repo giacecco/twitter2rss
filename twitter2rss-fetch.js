@@ -113,7 +113,7 @@ async.parallel([
     if (argv.retweets) results = results.filter(s => !s.in_reply_to_status_id_str && !s.text.match(/^rt /i));
 
     // drop replies, checks both the metadata and the text
-    if (argv.retweets) results = results.filter(s => !s.in_reply_to_user_id_str && !s.text.match(/^@/));
+    if (argv.replies) results = results.filter(s => !s.in_reply_to_user_id_str && !s.text.match(/^@/));
 
     // sort in chronological order
     results.forEach(s => s.created_at = new Date(s.created_at));
