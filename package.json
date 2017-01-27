@@ -1,0 +1,26 @@
+{
+  "name": "twitter2rss",
+  "version": "0.1.9",
+  "description": "twitter2rss ===========",
+  "main": "twitter2rss-render.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Digital-Contraptions-Imaginarium/twitter2rss.git"
+  },
+  "author": "Gianfranco Cecconi <giacecco@dico.im>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Digital-Contraptions-Imaginarium/twitter2rss/issues"
+  },
+  "homepage": "https://github.com/Digital-Contraptions-Imaginarium/twitter2rss#readme",
+  "dependencies": {
+    "async": "^2.1.4",
+    "fs-extra": "^2.0.0",
+    "im.dico.t2": "^0.1.0",
+    "sqlite3": "^3.1.8",
+    "underscore": "^1.8.3"
+  }
+}
