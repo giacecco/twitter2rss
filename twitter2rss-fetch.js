@@ -24,6 +24,11 @@ argv.language = [ ].concat(argv.language);
 // second level domains.
 const URL_REGEX = new RegExp(/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]{2,4}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi);
 
+const fileExistsSync = f => {
+    // TODO if the original from the *fs* library was deprecated there must be a reason...
+    var ok = true; try { fs.statSync(f); } catch (err) { ok = false; }; return ok;
+}
+
 const
   APPLICATION = {
       LOCAL: "im.dico.twitter2rss",
@@ -32,27 +37,27 @@ const
   },
   CONFIG_FOLDER = path.join(process.env.HOME, ".local", APPLICATION.LOCAL);
 
-const fileExistsSync = f => {
-  // TODO if the original from the *fs* library was deprecated there must be a reason...
-  var ok = true; try { fs.statSync(f); } catch (err) { ok = false; }; return ok;
-};
-
 var twitter = new T2({
-  "consumerkey": argv.consumerkey ? argv.consumerkey : process.env.TWITTER2RSS_CONSUMER_KEY,
-  "consumersecret": argv.consumersecret ? argv.consumersecret : process.env.TWITTER2RSS_CONSUMER_SECRET,
-  "tokenkey": argv.tokenkey ? argv.tokenkey : process.env.TWITTER2RSS_ACCESS_TOKEN_KEY,
-  "tokensecret": argv.tokensecret ? argv.tokensecret : process.env.TWITTER2RSS_ACCESS_TOKEN_SECRET
+    "local": path.join(process.env.HOME, ".local", APPLICATION.LOCAL, "t2"),
+    "consumerkey": argv.consumerkey ? argv.consumerkey : process.env.TWITTER2RSS_CONSUMER_KEY,
+    "consumersecret": argv.consumersecret ? argv.consumersecret : process.env.TWITTER2RSS_CONSUMER_SECRET,
+    "tokenkey": argv.tokenkey ? argv.tokenkey : process.env.TWITTER2RSS_ACCESS_TOKEN_KEY,
+    "tokensecret": argv.tokensecret ? argv.tokensecret : process.env.TWITTER2RSS_ACCESS_TOKEN_SECRET
 });
 
 let configuration = { "searches": [ ], "lists": [ ], "drops": [ ] };
 // interprets all specified configuration files
 argv._.forEach(configurationFile => {
-    if (fileExistsSync(configurationFile)) {
-        let c = JSON.parse(fs.readFileSync(configurationFile, { "encoding": "utf8" }));
-        configuration.searches = configuration.searches.concat(c.searches);
-        configuration.lists = configuration.lists.concat(c.lists);
-        configuration.drops = configuration.drops.concat(c.drops);
+    let newConfiguration = undefined;
+    try {
+        newConfiguration = JSON.parse(fs.readFileSync(configurationFile, { "encoding": "utf8" }));
+    } catch (err) {
+        console.err("Failed reading configuration " + configurationFile + " with error: " + err.message);
+        process.exit(1);
     }
+    if (newConfiguration.searches) configuration.searches = configuration.searches.concat(newConfiguration.searches);
+    if (newConfiguration.lists) configuration.lists = configuration.lists.concat(newConfiguration.lists);
+    if (newConfiguration.drops) configuration.drops = configuration.drops.concat(newConfiguration.drops);
 });
 // adds anything specified directly on the command line
 configuration.searches = _.uniq(argv.search ? configuration.searches.concat(argv.search) : configuration.searches);
