@@ -76,8 +76,9 @@ async.parallel([
                     "count": 100,
                     "resultType": "recent"
                 }, (err, results) => {
-                    // TODO: manage error here
-                    callback(null, results.statuses);
+                    // NOTE: we are resilent to errors from T2, however this
+                    //       won't help debugging any issues
+                    callback(null, err ? [ ] : results.statuses);
                 });
             }, (err, r) => {
                 callback(err, _.flatten(r, true));
@@ -96,13 +97,12 @@ async.parallel([
                     "list_id": listId,
                     "count": 100 // not clear if there's a max here
                 }, (err, results) => {
-                    // TODO: manage error here
-                    // NOTE: the tweets' language cannot be specified in lists/statuses ,
-                    //       hence the filtering here
-                    callback(null, results);
+                    // NOTE: we are resilent to errors from T2, however this 
+                    //       won't help debugging any issues
+                    callback(null, err ? [ ] : results);
                 });
             }, (err, r) => {
-                callback(err, results = results.concat(_.flatten(r, true)));
+                callback(err, results.concat(_.flatten(r, true)));
             });
         });
     }
