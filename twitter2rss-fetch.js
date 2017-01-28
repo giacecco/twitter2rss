@@ -52,7 +52,7 @@ argv._.forEach(configurationFile => {
     try {
         newConfiguration = JSON.parse(fs.readFileSync(configurationFile, { "encoding": "utf8" }));
     } catch (err) {
-        console.err("Failed reading configuration " + configurationFile + " with error: " + err.message);
+        console.error("Failed reading configuration " + configurationFile + " with error: " + err.message);
         process.exit(1);
     }
     if (newConfiguration.searches) configuration.searches = configuration.searches.concat(newConfiguration.searches);
