@@ -45,11 +45,7 @@ process.stdin.on('end', function() {
                         "name": tweet.user.name + " (@" + tweet.user.screen_name + ")",
                         "link": 'https://twitter/' + tweet.user.screen_name
                     } ],
-            title:
-                "@"
-                + tweet.user.screen_name
-                + (tweet.text.split("<br>").length > 2 ? " (" + tweet.text.split("<br>").length + ")" : "")
-                + ": " + tweet.text.split("\n")[0],
+            title: tweet.text.split("\n")[0],
             description: tweet.text,
             date: tweet.created_at,
             link: "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str
