@@ -125,16 +125,21 @@ async.parallel([
     results = results.sort((x, y) => x.created_at - y.created_at);
 
     // drops messages that differ just by the hashtags or URLs they
-    // reference and keep the oldest tweet only
+    // reference and keep the oldest tweet only, if not empty
     if (argv.noise) {
-        results = _.uniq(results, s => s.text
-            // drop the URLs
-            .replace(URL_REGEX, "")
-            // drop the hashtags
-            .replace(/#[\w-]+/g, "")
-            // drop all dirty characters and spaces
-            .replace(/[^A-Za-z0-9]/g, "")
-        );
+        let denoisedResultsIds = results
+            .map(s => s.text
+                // drop the URLs
+                .replace(URL_REGEX, "")
+                // drop the hashtags
+                .replace(/#[\w-]+/g, "")
+                // drop all dirty characters and spaces
+                .replace(/[^A-Za-z0-9]/g, "")
+                // drop tweets that are empty after removing all the noise
+            )
+            .filter(s => s.text !== "")
+            .map(s => s.id_str);
+        results = results.filter(s => _.contains(denoisedResultsIds, s.id_str));
     }
 
     // final touches
