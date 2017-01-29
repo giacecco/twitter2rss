@@ -33,7 +33,7 @@ const
   APPLICATION = {
       LOCAL: "im.dico.twitter2rss",
       NAME: "twitter2rss",
-      VERSION: "0.2.0"
+      VERSION: "0.1.10"
   },
   CONFIG_FOLDER = path.join(process.env.HOME, ".local", APPLICATION.LOCAL);
 
@@ -97,7 +97,7 @@ async.parallel([
                     "list_id": listId,
                     "count": 100 // not clear if there's a max here
                 }, (err, results) => {
-                    // NOTE: we are resilent to errors from T2, however this 
+                    // NOTE: we are resilent to errors from T2, however this
                     //       won't help debugging any issues
                     callback(null, err ? [ ] : results);
                 });
@@ -112,7 +112,14 @@ async.parallel([
     // different searches and lists, identified by tweet id
     results = _.uniq(results, r => r.id_str);
 
-    if (configuration.drops) results = results.filter(s => !_.any(configuration.drops, d => s.text.match(new RegExp(d))));
+    // drops tweets whose text, author name or author screen name (@something)
+    // matches any of the specified drops
+    if (configuration.drops.length > 0) results = results.filter(s => {
+        configuration.drops = configuration.drops.map(d => new RegExp(d));
+        return !_.any(configuration.drops, d => s.text.match(d)) &&
+            !_.any(configuration.drops, d => s.user.name.match(d)) &&
+            !_.any(configuration.drops, d => s.user.screen_name.match(d));
+    });
 
     // drop retweets, checks both the metadata and the text
     if (argv.retweets) results = results.filter(s => !s.in_reply_to_status_id_str && !s.text.match(/^rt /i));
