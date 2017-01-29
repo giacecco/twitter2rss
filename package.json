@@ -1,6 +1,6 @@
 {
   "name": "twitter2rss",
-  "version": "0.1.9",
+  "version": "0.2.1",
   "description": "twitter2rss",
   "main": "twitter2rss-render.js",
   "scripts": {

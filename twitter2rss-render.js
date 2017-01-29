@@ -8,7 +8,7 @@ const
     APPLICATION = {
         LOCAL: "im.dico.twitter2rss",
         NAME: "twitter2rss",
-        VERSION: "0.2.0"
+        VERSION: "0.2.1"
     };
 
 let data = "";
