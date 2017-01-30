@@ -9,7 +9,8 @@ const
         LOCAL: "im.dico.twitter2rss",
         NAME: "twitter2rss",
         VERSION: "0.2.0"
-    };
+    },
+    CONFIG_FOLDER = path.join(process.env.HOME, ".config", APPLICATION.LOCAL);
 
 let data = "";
 
@@ -33,14 +34,17 @@ process.stdin.on('end', function() {
 
     // create the feed
     let feed = new Feed({
-        id:      argv._[0],
+        // the id must be an URL otherwise the feed is not valid Atom, however
+        // this is not a valid URL of course
+        id:      "https://github.com/Digital-Contraptions-Imaginarium/twitter2rss/" + argv._[0],
         title:   "twitter2rss_" + argv._[0],
         link:    'https://github.com/Digital-Contraptions-Imaginarium/twitter2rss',
         updated: Math.max(_.pluck(tweets, "created_at"))
     });
     tweets.forEach(function (tweet) {
         feed.addItem({
-            id: tweet.id_str,
+            // the id must be an URL otherwise the feed is not valid Atom
+            id: "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str,
             author: [ {
                         "name": tweet.user.name + " (@" + tweet.user.screen_name + ")",
                         "link": 'https://twitter/' + tweet.user.screen_name
