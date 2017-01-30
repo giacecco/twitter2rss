@@ -33,7 +33,7 @@ const
   APPLICATION = {
       LOCAL: "im.dico.twitter2rss",
       NAME: "twitter2rss",
-      VERSION: "0.2.1"
+      VERSION: "0.1.10"
   },
   CONFIG_FOLDER = path.join(process.env.HOME, ".local", APPLICATION.LOCAL);
 
