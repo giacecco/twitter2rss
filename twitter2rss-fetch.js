@@ -4,6 +4,7 @@ const async = require("async"),
       // https://github.com/Digital-Contraptions-Imaginarium/t2
       // MIT license
       T2 = require("im.dico.t2").Twitter,
+      twitter2RssShared = require("./twitter2rss-shared"),
       _ = require("underscore"),
       argv = require('yargs')
           .usage("Usage: $0 \
@@ -19,10 +20,6 @@ const async = require("async"),
 
 // force argv.languages into an array
 argv.language = [ ].concat(argv.language);
-
-// From http://stackoverflow.com/a/3809435 + change to support 1-character
-// second level domains.
-const URL_REGEX = new RegExp(/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]{2,4}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi);
 
 const fileExistsSync = f => {
     // TODO if the original from the *fs* library was deprecated there must be a reason...
@@ -63,6 +60,7 @@ argv._.forEach(configurationFile => {
 configuration.searches = _.uniq(argv.search ? configuration.searches.concat(argv.search) : configuration.searches);
 configuration.lists = _.uniq(argv.list ? configuration.lists.concat(argv.list) : configuration.lists);
 configuration.drops = _.uniq(argv.drop ? configuration.drops.concat(argv.drop) : configuration.drops);
+
 // does the job
 let results = [ ];
 async.parallel([
@@ -114,12 +112,7 @@ async.parallel([
 
     // drops tweets whose text, author name or author screen name (@something)
     // matches any of the specified drops
-    if (configuration.drops.length > 0) results = results.filter(s => {
-        configuration.drops = configuration.drops.map(d => new RegExp(d));
-        return !_.any(configuration.drops, d => s.text.match(d)) &&
-            !_.any(configuration.drops, d => s.user.name.match(d)) &&
-            !_.any(configuration.drops, d => s.user.screen_name.match(d));
-    });
+    results = twitter2RssShared.filterForDrops(results, configuration.drops);
 
     // drop retweets, checks both the metadata and the text
     if (argv.retweets) results = results.filter(s => !s.in_reply_to_status_id_str && !s.text.match(/^rt /i));
@@ -133,23 +126,7 @@ async.parallel([
 
     // drops messages that differ just by the hashtags or URLs they
     // reference and keep the oldest tweet only, if not empty
-    if (argv.noise) {
-        let denoisedResultsIds = results
-            .map(s => {
-                s.text
-                    // drop the URLs
-                    .replace(URL_REGEX, "")
-                    // drop the hashtags
-                    .replace(/#[\w-]+/g, "")
-                    // drop all dirty characters and spaces
-                    .replace(/[^A-Za-z0-9]/g, "");
-                return s;
-            })
-            // drop tweets that are empty after removing all the noise
-            .filter(s => s.text !== "")
-            .map(s => s.id_str);
-        results = results.filter(s => _.contains(denoisedResultsIds, s.id_str));
-    }
+    if (argv.noise) results = twitter2RssShared.filterForNoise(results);
 
     // final touches
     results = results
