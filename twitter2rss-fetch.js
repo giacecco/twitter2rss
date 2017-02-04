@@ -13,7 +13,6 @@ const async = require("async"),
               [--retweets] \
               [--replies] \
               [--noise] \
-              [--all] \
               [--nocache] \
               [--language iso_639_1_code...] \
               [--post] \
@@ -94,7 +93,11 @@ async.parallel([
     // restore the dates
     tweets.forEach(s => s.created_at = new Date(s.created_at));
 
-    if (!argv.all) tweets = twitter2RssShared.allFilters(
+    // delete duplicates coming from the same tweet being captured by
+    // different searches and lists, identified by tweet id
+    tweets = _.uniq(tweets, r => r.id_str);
+
+    tweets = twitter2RssShared.allFilters(
         tweets,
         {
             "drops": configuration.drops,

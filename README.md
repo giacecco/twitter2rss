@@ -1,19 +1,21 @@
 twitter2rss
 ===========
 
-_twitter2rss_ is a set of two scripts to perform and cache complex searches on Twitter and produce JSON or other file formats, including for example Atom feeds (hence the name) to use in RSS readers such as [Newsbeuter](http://newsbeuter.org/).
+*twitter2rss* is a set of two scripts to perform and cache complex searches on Twitter and produce JSON or other file formats, including for example Atom feeds (hence the name) to use in RSS readers such as [Newsbeuter](http://newsbeuter.org/).
 
-_twitter2rss_ is transparently throttled not to violate Twitter's rate limiting terms. The script won't terminate until calling all the required APIs is possible and completed. Throttling is implemented by the underlying Twitter API client [Digital-Contraptions-Imaginarium/t2](https://github.com/Digital-Contraptions-Imaginarium/t2).
+## *twitter2rss-fetch.js*
+
+*twitter2rss-fetch.js* is the script responsible to query the Twitter APIs, producing arrays of tweets in JSON format, or more manageable formats such as JSONL. It is transparently throttled not to violate Twitter's rate limiting terms. The script won't terminate until calling all the required APIs is possible and completed. Throttling is implemented by the underlying Twitter API client [Digital-Contraptions-Imaginarium/t2](https://github.com/Digital-Contraptions-Imaginarium/t2).
 
 Usage is:
 
 ```
-$ node twitter2rss-fetch.js [configuration file] [--search search_string] [--list list_name] [--drop regexp] [--noise] [--retweets] [--replies] [--post javascript_code_or_script_file]
+$ node twitter2rss-fetch.js [configuration file] [--search search_string] [--list list_name] [--drop regexp] [--noise] [--retweets] [--replies] [--all] [--post javascript_code_or_script_file]
 ```
 
-You can specify one configuration files only but any number of additional search strings, postprocessing JavaScript commands etc.
+You can specify one configuration files only but any number of additional search strings, postprocessing (```--post```) JavaScript commands etc.
 
-The configuration files are defined using JSON files in the format below:
+Configuration files are defined using JSON in the format below:
 
 ```
 {
@@ -35,23 +37,22 @@ The configuration files are defined using JSON files in the format below:
 }
 ```
 
-Searches are specified by using the same format you would use on Twitter's website, e.g. using capital letter logical operators such as in ```#datascience OR @dicoim```. When calling Twitter's ```search/tweets``` API the ```resultType``` parameter is always set to "recent" in the attempt to avoid Twitter's editorialization (read more [here](https://dev.twitter.com/rest/reference/get/search/tweets)).
+Searches are specified by using the same format you would use on Twitter's website, e.g. using capital letter logical operators such as in ```#datascience OR @dicoim```. When calling Twitter's ```search/tweets``` API the ```resultType``` parameter is always set to "recent" in the attempt to avoid Twitter's interference in the results (read more [here](https://dev.twitter.com/rest/reference/get/search/tweets)).
 
-The "drops" are regular expressions applied to the tweets' text and user screen name that specify which of the fetched tweets to delete straight away, e.g. to filter out unwanted hashtag.
+The *drops* are regular expressions applied to the tweets' text, user name and user screen name that specify tweets to ignore, e.g. to filter out unwanted hashtag.
 
-Any number of lists searches or drops, including none, can be specified. If multiple configuration files are specified, their parameters are merged together.
+By specifying the ```--retweet``` argument, all re-tweets are ignored (statuses starting by 'RT', or marked as such in the metadata).
 
-By specifying the ```--retweet``` argument, all re-tweets are dropped (statuses starting by 'RT', or marked as such in the metadata).
+By specifying the ```--replies``` argument, all replies are ignored (statuses starting by '@', or marked as such in the metadata).
 
-By specifying the ```--replies``` argument, all replies are dropped (statuses starting by '@', or marked as such in the metadata).
-
-By specifying the ```--noise``` argument, tweets whose content differ only by the URLs or hashtags are dropped, and the oldest tweet is kept.
-
-**Note that if you specify the ```--all``` argument in ```twitter2rss-fetch```, the configuration's ```--retweet```, ```--replies``` and ```--noise``` are ignored. This is useful when you want to save everything and cleaning only later, when rendering.***
+By specifying the ```--noise``` argument, tweets whose content differ only by the URLs or hashtags are ignored, and the oldest tweet is kept.
 
 The ```--post``` *t2* option can be used to run one or more transformations over the tweets, before displaying, expressed as a synchronous or asynchronous JavaScript function. E.g. a very useful transformation is ```--post 'r => r.map(x => JSON.stringify(x)).join("\n")' ``` that makes one JSON array of objects - as in the results of the original ```lists/list``` API - into [JSONL](http://jsonlines.org/): one JSON object per line. ```--post``` can also reference a text file with the code you want to execute on the results.
 
-Only tweets in English are returned, unless one or more alternative ISO 639-1 codes are specified using the _--language_ command line parameter.
+Only tweets in English are returned, unless one or more alternative ISO 639-1 codes are specified using the ```--language``` argument.
+
+## *twitter2rss-render.js*
+*twitter2rss-render.js* transforms JSONL into Atom, to be read by RSS readers. It uses the same ```-retweet```, ```-replies```, ```-noise``` and ```--language``` arguments of *twitter2rss-fetch.js*.
 
 ## Example
 
@@ -85,4 +86,10 @@ Trump's Order May deport 11 million https://t.co/RMzWgLnYah via @ABC BS  Trump i
 Mexican President Cancels Meeting With Trump As Tensions Rise Between Countries - https://t.co/j1Rpvy6cWr
 Bannon and T Trump registered to vote in two states ... https://t.co/rpPNHo4iTn
 sqlite>
+```
+
+... but you can also use *twitter2rss-render.js* to produce an Atom feed:
+
+```
+sqlite3 temp-database.sqlite3 "select payload from tweets;" | node twitter2rss-render.js > temp.atom
 ```

@@ -7,9 +7,9 @@ const
 const URL_REGEX = new RegExp(/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-z]{2,4}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)/gi);
 
 exports.readConfiguration = argv => {
-    let configuration = undefined;
+    let configuration = { "searches": [ ], "lists": [ ], "drops": [ ] };
     try {
-        configuration = JSON.parse(fs.readFileSync(argv._[0], { "encoding": "utf8" }));
+        if (argv._.length > 0) configuration = JSON.parse(fs.readFileSync(argv._[0], { "encoding": "utf8" }));
     } catch (err) {
         console.error("Failed reading configuration " + argv._[0] + " with error: " + err.message);
         process.exit(1);
@@ -64,9 +64,8 @@ exports.allFilters = (tweets, options) => {
 
     let _tweets = JSON.parse(JSON.stringify(tweets));
 
-    // delete duplicates coming from the same tweet being captured by
-    // different searches and lists, identified by tweet id
-    _tweets = _.uniq(_tweets, r => r.id_str);
+    // restore the dates
+    _tweets.forEach(s => s.created_at = new Date(s.created_at));
 
     // drops tweets whose text, author name or author screen name (@something)
     // matches any of the specified drops
