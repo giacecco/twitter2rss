@@ -31,18 +31,21 @@ process.stdin.on('end', function() {
         }
     }, [ ]);
 
-    let configuration = JSON.parse(fs.readFileSync(argv._[0], { "encoding": "utf8" }));
+    // restore the dates
+    tweets.forEach(s => s.created_at = new Date(s.created_at));
 
-    // makes all the *created_at* back into dates
-    tweets.forEach(t => t.created_at = new Date(t.created_at));
+    let configuration = twitter2RssShared.readConfiguration(argv);
 
-    // drops tweets whose text, author name or author screen name (@something)
-    // matches any of the specified drops
-    tweets = twitter2RssShared.filterForDrops(tweets, configuration.drops);
-
-    // drops messages that differ just by the hashtags or URLs they
-    // reference and keep the oldest tweet only, if not empty
-    if (argv.noise) tweets = twitter2RssShared.filterForNoise(tweets);
+    tweets = twitter2RssShared.allFilters(
+        tweets,
+        {
+            "drops": configuration.drops,
+            "retweets": configuration.retweets,
+            "replies": configuration.replies,
+            "noise": configuration.noise,
+            "languages": configuration.languages
+        }
+    );
 
     // create the feed
     let feed = new Feed({

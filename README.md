@@ -1,7 +1,7 @@
 twitter2rss
 ===========
 
-_twitter2rss_ is a series of scripts to perform and cache complex searches on Twitter and produce JSON or other file formats, including for example Atom feeds (hence the name) to use in RSS readers such as [Newsbeuter](http://newsbeuter.org/).
+_twitter2rss_ is a set of two scripts to perform and cache complex searches on Twitter and produce JSON or other file formats, including for example Atom feeds (hence the name) to use in RSS readers such as [Newsbeuter](http://newsbeuter.org/).
 
 _twitter2rss_ is transparently throttled not to violate Twitter's rate limiting terms. The script won't terminate until calling all the required APIs is possible and completed. Throttling is implemented by the underlying Twitter API client [Digital-Contraptions-Imaginarium/t2](https://github.com/Digital-Contraptions-Imaginarium/t2).
 
@@ -11,7 +11,7 @@ Usage is:
 $ node twitter2rss-fetch.js [configuration file] [--search search_string] [--list list_name] [--drop regexp] [--noise] [--retweets] [--replies] [--post javascript_code_or_script_file]
 ```
 
-You can specify any number of configuration files, search strings, postprocessing JavaScript commands etc.
+You can specify one configuration files only but any number of additional search strings, postprocessing JavaScript commands etc.
 
 The configuration files are defined using JSON files in the format below:
 
@@ -46,6 +46,8 @@ By specifying the ```--retweet``` argument, all re-tweets are dropped (statuses 
 By specifying the ```--replies``` argument, all replies are dropped (statuses starting by '@', or marked as such in the metadata).
 
 By specifying the ```--noise``` argument, tweets whose content differ only by the URLs or hashtags are dropped, and the oldest tweet is kept.
+
+**Note that if you specify the ```--all``` argument in ```twitter2rss-fetch```, the configuration's ```--retweet```, ```--replies``` and ```--noise``` are ignored. This is useful when you want to save everything and cleaning only later, when rendering.***
 
 The ```--post``` *t2* option can be used to run one or more transformations over the tweets, before displaying, expressed as a synchronous or asynchronous JavaScript function. E.g. a very useful transformation is ```--post 'r => r.map(x => JSON.stringify(x)).join("\n")' ``` that makes one JSON array of objects - as in the results of the original ```lists/list``` API - into [JSONL](http://jsonlines.org/): one JSON object per line. ```--post``` can also reference a text file with the code you want to execute on the results.
 

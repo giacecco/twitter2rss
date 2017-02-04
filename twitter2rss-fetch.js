@@ -13,15 +13,12 @@ const async = require("async"),
               [--retweets] \
               [--replies] \
               [--noise] \
+              [--all] \
               [--nocache] \
               [--language iso_639_1_code...] \
               [--post] \
           ")
-          .default("language", [ "en" ])
           .argv;
-
-// force argv.languages into an array
-argv.language = [ ].concat(argv.language);
 
 const fileExistsSync = f => {
     // TODO if the original from the *fs* library was deprecated there must be a reason...
@@ -45,24 +42,7 @@ var twitter = new T2({
     "nocache": argv.nocache
 });
 
-let configuration = { "searches": [ ], "lists": [ ], "drops": [ ] };
-// interprets all specified configuration files
-argv._.forEach(configurationFile => {
-    let newConfiguration = undefined;
-    try {
-        newConfiguration = JSON.parse(fs.readFileSync(configurationFile, { "encoding": "utf8" }));
-    } catch (err) {
-        console.error("Failed reading configuration " + configurationFile + " with error: " + err.message);
-        process.exit(1);
-    }
-    if (newConfiguration.searches) configuration.searches = configuration.searches.concat(newConfiguration.searches);
-    if (newConfiguration.lists) configuration.lists = configuration.lists.concat(newConfiguration.lists);
-    if (newConfiguration.drops) configuration.drops = configuration.drops.concat(newConfiguration.drops);
-});
-// adds anything specified directly on the command line
-configuration.searches = _.uniq(argv.search ? configuration.searches.concat(argv.search) : configuration.searches);
-configuration.lists = _.uniq(argv.list ? configuration.lists.concat(argv.list) : configuration.lists);
-configuration.drops = _.uniq(argv.drop ? configuration.drops.concat(argv.drop) : configuration.drops);
+let configuration = twitter2RssShared.readConfiguration(argv);
 
 // does the job
 let tweets = [ ];
@@ -70,7 +50,7 @@ async.parallel([
     callback => {
         // all the searches
         async.map(configuration.searches, (searchString, callback) => {
-            async.map(argv.language, (lang, callback) => {
+            async.map(configuration.languages, (lang, callback) => {
                 twitter.getSearchTweets({
                     "q": searchString,
                     "lang": lang, //search/tweets allows me to specify a language
@@ -111,32 +91,19 @@ async.parallel([
     }
 ], err => {
 
-    // delete duplicates coming from the same tweet being captured by
-    // different searches and lists, identified by tweet id
-    tweets = _.uniq(tweets, r => r.id_str);
-
-    // drops tweets whose text, author name or author screen name (@something)
-    // matches any of the specified drops
-    tweets = twitter2RssShared.filterForDrops(tweets, configuration.drops);
-
-    // drop retweets, checks both the metadata and the text
-    if (argv.retweets) tweets = tweets.filter(s => !s.in_reply_to_status_id_str && !s.text.match(/^rt /i));
-
-    // drop replies, checks both the metadata and the text
-    if (argv.replies) tweets = tweets.filter(s => !s.in_reply_to_user_id_str && !s.text.match(/^@/));
-
-    // sort in chronological order
+    // restore the dates
     tweets.forEach(s => s.created_at = new Date(s.created_at));
-    tweets = tweets.sort((x, y) => x.created_at - y.created_at);
 
-    // drops messages that differ just by the hashtags or URLs they
-    // reference and keep the oldest tweet only, if not empty
-    if (argv.noise) tweets = twitter2RssShared.filterForNoise(tweets);
-
-    // final touches
-    tweets = tweets
-        // filter for the required languages
-        .filter(s => _.contains(argv.language, s.lang));
+    if (!argv.all) tweets = twitter2RssShared.allFilters(
+        tweets,
+        {
+            "drops": configuration.drops,
+            "retweets": configuration.retweets,
+            "replies": configuration.replies,
+            "noise": configuration.noise,
+            "languages": configuration.languages
+        }
+    );
 
     // --post directives and output
     // NOTE: this is the same code as in t2cli.json in
