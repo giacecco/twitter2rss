@@ -7,11 +7,13 @@ const async = require("async"),
       twitter2RssShared = require("./twitter2rss-shared"),
       _ = require("underscore"),
       argv = require('yargs')
+          // TODO: at the moment, this is never displayed
           .usage("Usage: $0 \
               [configuration_file] \
               [--retweets] \
               [--replies] \
               [--noise] \
+              [--nocache] \
               [--language iso_639_1_code...] \
               [--post] \
           ")
@@ -39,7 +41,8 @@ var twitter = new T2({
     "consumerkey": argv.consumerkey ? argv.consumerkey : process.env.TWITTER2RSS_CONSUMER_KEY,
     "consumersecret": argv.consumersecret ? argv.consumersecret : process.env.TWITTER2RSS_CONSUMER_SECRET,
     "tokenkey": argv.tokenkey ? argv.tokenkey : process.env.TWITTER2RSS_ACCESS_TOKEN_KEY,
-    "tokensecret": argv.tokensecret ? argv.tokensecret : process.env.TWITTER2RSS_ACCESS_TOKEN_SECRET
+    "tokensecret": argv.tokensecret ? argv.tokensecret : process.env.TWITTER2RSS_ACCESS_TOKEN_SECRET,
+    "nocache": argv.nocache
 });
 
 let configuration = { "searches": [ ], "lists": [ ], "drops": [ ] };
@@ -62,7 +65,7 @@ configuration.lists = _.uniq(argv.list ? configuration.lists.concat(argv.list) :
 configuration.drops = _.uniq(argv.drop ? configuration.drops.concat(argv.drop) : configuration.drops);
 
 // does the job
-let results = [ ];
+let tweets = [ ];
 async.parallel([
     callback => {
         // all the searches
@@ -82,7 +85,8 @@ async.parallel([
                 callback(err, _.flatten(r, true));
             });
         }, (err, r) => {
-            callback(err, results = results.concat(_.flatten(r, true)));
+            if (!err) tweets = tweets.concat(_.flatten(r, true));
+            callback(err);
         });
     },
     callback => {
@@ -100,7 +104,8 @@ async.parallel([
                     callback(null, err ? [ ] : results);
                 });
             }, (err, r) => {
-                callback(err, results.concat(_.flatten(r, true)));
+                if (!err) tweets = tweets.concat(_.flatten(r, true));
+                callback(err);
             });
         });
     }
@@ -108,35 +113,35 @@ async.parallel([
 
     // delete duplicates coming from the same tweet being captured by
     // different searches and lists, identified by tweet id
-    results = _.uniq(results, r => r.id_str);
+    tweets = _.uniq(tweets, r => r.id_str);
 
     // drops tweets whose text, author name or author screen name (@something)
     // matches any of the specified drops
-    results = twitter2RssShared.filterForDrops(results, configuration.drops);
+    tweets = twitter2RssShared.filterForDrops(tweets, configuration.drops);
 
     // drop retweets, checks both the metadata and the text
-    if (argv.retweets) results = results.filter(s => !s.in_reply_to_status_id_str && !s.text.match(/^rt /i));
+    if (argv.retweets) tweets = tweets.filter(s => !s.in_reply_to_status_id_str && !s.text.match(/^rt /i));
 
     // drop replies, checks both the metadata and the text
-    if (argv.replies) results = results.filter(s => !s.in_reply_to_user_id_str && !s.text.match(/^@/));
+    if (argv.replies) tweets = tweets.filter(s => !s.in_reply_to_user_id_str && !s.text.match(/^@/));
 
     // sort in chronological order
-    results.forEach(s => s.created_at = new Date(s.created_at));
-    results = results.sort((x, y) => x.created_at - y.created_at);
+    tweets.forEach(s => s.created_at = new Date(s.created_at));
+    tweets = tweets.sort((x, y) => x.created_at - y.created_at);
 
     // drops messages that differ just by the hashtags or URLs they
     // reference and keep the oldest tweet only, if not empty
-    if (argv.noise) results = twitter2RssShared.filterForNoise(results);
+    if (argv.noise) tweets = twitter2RssShared.filterForNoise(tweets);
 
     // final touches
-    results = results
+    tweets = tweets
         // filter for the required languages
         .filter(s => _.contains(argv.language, s.lang));
 
     // --post directives and output
     // NOTE: this is the same code as in t2cli.json in
     //       Digital-Contraptions-Imaginarium/t2
-    async.reduce(!argv.post ? [ "x => JSON.stringify(x)" ] : [ ].concat(argv.post), results, (memo, p, callback) => {
+    async.reduce(!argv.post ? [ "x => JSON.stringify(x)" ] : [ ].concat(argv.post), tweets, (memo, p, callback) => {
         p = eval(fileExistsSync(p) ? fs.readFileSync(p, { "encoding": "utf8" }) : p);
         if (p.length > 1) {
             // the --post function is asynchronous
@@ -145,12 +150,12 @@ async.parallel([
             // the --post function is synchronous
             callback(null, p(memo));
         }
-    }, (err, results) => {
+    }, (err, tweets) => {
         if (err) {
             console.error("Undefined error in executing the --post commands.");
             process.exit(1);
         }
-        console.log(results);
+        console.log(tweets);
     });
 
 });
