@@ -72,10 +72,10 @@ exports.allFilters = (tweets, options) => {
     _tweets = exports.filterForDrops(_tweets, options.drops);
 
     // drop retweets, checks both the metadata and the text
-    if (options.retweets) _tweets = _tweets.filter(s => !s.in_reply_to_status_id_str && !s.text.match(/^rt /i));
+    if (options.retweets) _tweets = _tweets.filter(s => !s.text.match(/^rt /i));
 
     // drop replies, checks both the metadata and the text
-    if (options.replies) _tweets = _tweets.filter(s => !s.in_reply_to_user_id_str && !s.text.match(/^@/));
+    if (options.replies) _tweets = _tweets.filter(s => !s.text.match(/^@/));
 
     // drops messages that differ just by the hashtags or URLs they
     // reference and keep the oldest tweet only, if not empty
