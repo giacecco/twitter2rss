@@ -42,7 +42,7 @@ process.stdin.on('end', function() {
             "retweets": configuration.retweets,
             "replies": configuration.replies,
             "noise": configuration.noise,
-            "languages": configuration.languages  
+            "languages": configuration.languages
         }
     );
 
