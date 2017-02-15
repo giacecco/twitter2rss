@@ -18,6 +18,8 @@ exports.readConfiguration = argv => {
     configuration.searches = _.uniq(argv.search ? configuration.searches.concat(argv.search) : configuration.searches);
     configuration.lists = _.uniq(argv.list ? configuration.lists.concat(argv.list) : configuration.lists);
     configuration.drops = _.uniq(argv.drop ? configuration.drops.concat(argv.drop) : configuration.drops);
+    configuration.retweets = argv.retweets;
+    configuration.replies = argv.replies;
     configuration.noise = argv.noise;
     configuration.languages = argv.language ? [ ].concat(argv.language) : [ "en" ];
     return configuration;
@@ -43,9 +45,9 @@ exports.filterForNoise = tweets => {
     _tweets.forEach(s => s.created_at = new Date(s.created_at));
     // sort in chronological order
     _tweets = _tweets.sort((x, y) => x.created_at - y.created_at);
-    let denoisedResultsIds = _tweets
+    let denoisedResultsIds = _.unique(JSON.parse(JSON.stringify(_tweets))
         .map(s => {
-            s.text
+            s.text = s.text
                 // drop the URLs
                 .replace(URL_REGEX, "")
                 // drop the hashtags
@@ -53,8 +55,7 @@ exports.filterForNoise = tweets => {
                 // drop all dirty characters and spaces
                 .replace(/[^A-Za-z0-9]/g, "");
             return s;
-        })
-        // drop tweets that are empty after removing all the noise
+        }), false, t => t.text)
         .filter(s => s.text !== "")
         .map(s => s.id_str);
     return _tweets.filter(s => _.contains(denoisedResultsIds, s.id_str));
