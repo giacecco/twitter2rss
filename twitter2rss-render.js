@@ -69,7 +69,7 @@ process.stdin.on('end', function() {
             "title": tweet.text.split("\n")[0],
             "description": tweet.text,
             "date": tweet.created_at,
-            "link": "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str
+            "link": "https://twitter.com/" + tweet.user.screen_name + "/status/" + tweet.id_str + "?theme=" + encodeURIComponent(feedName)
         });
     });
     console.log(feed.render('atom-1.0'));
